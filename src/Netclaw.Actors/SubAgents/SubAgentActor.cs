@@ -337,14 +337,27 @@ public sealed class SubAgentActor : ReceiveActor, IWithTimers
         {
             _completed = true;
             _pendingCheckpoint = null;
-            _replyTo.Tell(new SubAgentResult
+            var result = new SubAgentResult
             {
                 Completion = new ChildRunCompletion.Failed(SubAgentOutcomeReason.ActorStopped),
                 Output = "Subagent stopped before completion.",
                 AgentName = _definition.Name,
                 Findings = [],
                 FindingsCount = 0
-            });
+            };
+            if (_backgroundRunId is { } runId)
+            {
+                result = result with
+                {
+                    RunId = runId,
+                    ScopeId = new SubAgentScopeId(_subSessionId ?? throw new InvalidOperationException("A background child has no assigned scope."))
+                };
+                _replyTo.Tell(new BackgroundChildTerminal(runId, result), Self);
+            }
+            else
+            {
+                _replyTo.Tell(result);
+            }
         }
         _externalCancellationRegistration.Dispose();
         _toolExposure.EvictAll();
