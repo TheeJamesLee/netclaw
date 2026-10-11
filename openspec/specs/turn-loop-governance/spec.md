@@ -183,21 +183,22 @@ This change SHALL NOT introduce a poll interval, rate detector, or elapsed-text 
 - **THEN** it emits no pending-operation exception
 - **AND** an equal repeated denial remains ordinary recurrence evidence
 
-### Requirement: Detector evidence retains its task lifetime
+### Requirement: Detector evidence retains its live task lifetime
 
-The system SHALL retain established recurrence and unresolved corrections through compaction and automatic task continuation.
-It SHALL retain parent evidence through framework-owned persistence and recovery.
+The system SHALL retain established recurrence and unresolved corrections through live task continuation and compaction.
+It SHALL NOT persist recurrence detector state for crash recovery.
+Recovery SHALL preserve durable child results, job lineage, input closure, and assistant reports without replaying external effects.
 It SHALL never infer trusted success from result text or an absent receipt.
 A final actual result without its mandatory receipt SHALL cause an explicit runtime contract failure.
 The system SHALL preserve known results and prior evidence, complete required call-result pairs, and settle partial/failure without another model request.
 In-flight calls, approval waits, and external cancellation SHALL retain their separate lifecycle contracts.
-Fresh authorized user input or a fresh scheduled task SHALL reset prior task evidence.
-Overflow replay, automatic restart continuation, result admission, and approval retries SHALL NOT perform that reset.
-The first durable consumption of a canonical child result SHALL start a fresh recurrence window within its original detector task.
-The owner SHALL retain task identity, original authority, and sticky receipt failure.
-It SHALL clear exact entries, adjacent history, cold keys, and the last blocked action, then refresh same-task ledger copies.
+Fresh authorized user input or a fresh scheduled task SHALL reset live task evidence.
+Overflow replay, result admission, and approval retries SHALL NOT perform that reset while the session remains active.
+The first durable consumption of a canonical child result SHALL start a fresh in-memory recurrence window for that continuation.
+The owner SHALL retain original authority and durable delivery identity.
+It SHALL NOT store parent detector checkpoints, receipt-failure facts, or same-task detector copies in child or job ledgers.
 Acceptance, status, terminal preparation, admission, recovery, and duplicate adoption SHALL NOT grant this exception.
-Shell-job result continuation and legacy child adoption events SHALL retain their prior checkpoint restoration semantics.
+Shell-job result continuation and legacy child adoption events SHALL NOT restore durable detector checkpoints.
 
 The recent cold-key horizon SHALL contain at most 256 keys with one observation.
 The system SHALL retain pinned suspicion outside the canonical child-window exception.
@@ -212,12 +213,12 @@ Usage count alone SHALL NOT terminate a useful task.
 - **WHEN** the session compacts and the model repeats that identity
 - **THEN** the runtime reaches terminal settlement
 
-#### Scenario: Restart continuation retains the original episode
+#### Scenario: Recovery preserves committed results without detector state
 
-- **GIVEN** durable correction evidence for an interrupted authorized task
-- **WHEN** the parent recovers and continues that same task
-- **THEN** a repeated prohibited identity reaches terminal settlement
-- **AND** recovery does not redispatch calls with committed results
+- **GIVEN** an interrupted authorized task has committed tool results
+- **WHEN** the parent recovers and resumes from those records
+- **THEN** recovery does not redispatch calls with committed results
+- **AND** the detector starts from live observations after restart
 
 #### Scenario: A new scheduled task starts cleanly
 
@@ -288,7 +289,7 @@ Private replay payloads, identifiers, and hashes SHALL NOT enter published diagn
 
 The parent MUST retain the canonical adopted task context until terminal settlement.
 A tool batch MUST NOT close that task when it consumes an input ledger entry.
-The parent MUST restore the checkpoint for that task after an automatic restart.
+The parent MUST restore durable task context after an automatic restart without restoring detector state.
 
 #### Scenario: Recovery follows a completed batch
 
@@ -313,20 +314,20 @@ The parent MUST restore the checkpoint for that task after an automatic restart.
 ### Requirement: Background result delivery preserves its causal task evidence
 
 A new-format background job MUST persist its canonical origin `TurnId` and `ToolCallId` before process launch.
-The parent MUST commit its started-job record and matching detector checkpoint before continuation.
-The existing active-job record MUST retain that checkpoint when fresh input starts another task.
-A result delivery MUST restore only the checkpoint of its validated committed origin.
+The parent MUST commit its started-job record before continuation.
+The existing active-job record MUST retain that origin when fresh input starts another task.
+A result delivery MUST validate only its committed origin and SHALL NOT restore a detector checkpoint.
 Its canonical authority `TurnId` MUST equal its prefixed delivery key.
-Its automation authority MUST remain independent from the detector's causal task identity.
+Its automation authority MUST remain independent from live detector state.
 A new-format job without its mandatory committed parent record MUST fail loudly without another model request.
 Only a pre-change job without an origin MAY use an explicit legacy evidence-gap baseline.
-The parent MUST commit continuation evidence before terminal delivery removes the job record.
+The parent MUST commit continuation delivery evidence before terminal delivery removes the job record.
 
 #### Scenario: New input precedes an old job result
 
-- **WHEN** a fresh user task replaces the current checkpoint before a linked job completes
-- **THEN** the active-job record retains the original checkpoint
-- **AND** the later result restores that checkpoint without using the fresh task's evidence or authority
+- **WHEN** a fresh user task starts before a linked job completes
+- **THEN** the active-job record retains the original origin
+- **AND** the later result validates that origin without using the fresh task's authority or detector state
 
 #### Scenario: A job completes before its start receipt
 
@@ -338,24 +339,24 @@ The parent MUST commit continuation evidence before terminal delivery removes th
 
 - **WHEN** a new-format delivered job lacks its committed parent lineage record
 - **THEN** the parent reports an explicit lineage contract failure
-- **AND** the parent preserves the known result without rerunning the effect or substituting another checkpoint
+- **AND** the parent preserves the known result without rerunning the effect or substituting current detector state
 
 #### Scenario: Two jobs retain the same original task
 
 - **WHEN** one task starts two jobs before fresh user input
-- **THEN** both active-job records retain the original recurrence task identity and checkpoint
+- **THEN** both active-job records retain their original origins
 - **AND** each completed delivery preserves the other job's record
 
 #### Scenario: Duplicate and invalid origins cannot activate work
 
 - **WHEN** a delivery repeats a consumed key or supplies a stale, forged, or foreign origin
-- **THEN** it cannot restore a checkpoint or dispatch another effect
+- **THEN** it cannot validate an origin or dispatch another effect
 
 #### Scenario: Invalid delivery cannot complete another task
 
 - **WHEN** a new user task precedes a malformed old job result
 - **THEN** the actor closes only the delivery's canonical input ID and authority turn identity
-- **AND** the actor preserves the user task's context, checkpoint, and other pending inputs
+- **AND** the actor preserves the user task's context and other pending inputs
 - **AND** the actor emits a bounded explicit failure report without a model request for that delivery
 - **AND** the actor does not emit `TurnCompleted` for the user task
 
@@ -363,7 +364,7 @@ The parent MUST commit continuation evidence before terminal delivery removes th
 
 - **WHEN** the actor crashes after it commits invalid delivery closure and before it emits the report
 - **THEN** recovery retains that closure and the existing delivery deduplication ledger
-- **AND** a duplicate delivery cannot reopen the input or reset another task's checkpoint
+- **AND** a duplicate delivery cannot reopen the input or reset another task's live detector state
 
 #### Scenario: A persisted new-format definition has no origin
 
@@ -376,14 +377,14 @@ The parent MUST commit continuation evidence before terminal delivery removes th
 #### Scenario: A legacy claim targets a new-format job
 
 - **WHEN** a delivery claims version zero without an origin for a tracked version-one job
-- **THEN** the runtime rejects the downgrade and preserves the committed checkpoint
+- **THEN** the runtime rejects the downgrade and preserves the committed origin
 - **AND** a genuine pre-change job without a new-format parent record keeps its explicit evidence-gap disposition
 
 #### Scenario: Recovery completes an adopted job delivery
 
 - **WHEN** recovery resumes a consumed job input through a restart reminder
 - **THEN** terminal bookkeeping uses the adopted canonical source kind and prefixed authority turn identity
-- **AND** it removes only that delivered job record after the checkpoint commit
+- **AND** it removes only that delivered job record after delivery commit
 
 #### Scenario: The rejection report survives interrupted output
 
@@ -400,7 +401,7 @@ The parent MUST commit continuation evidence before terminal delivery removes th
 #### Scenario: An unfinished task receives an invalid delivery
 
 - **WHEN** an authorized unfinished task closes an invalid buffered job delivery
-- **THEN** the runtime preserves the task's canonical context and checkpoint
+- **THEN** the runtime preserves the task's canonical context
 - **AND** the caller retains its ordinary continuation choice
 
 ### Requirement: Legacy approval redrive establishes a canonical evidence baseline
@@ -413,14 +414,14 @@ The existing adopted task context MUST retain it for restart continuity without 
 The runtime MUST preserve completed sibling results without another invocation or a fabricated receipt.
 The existing `ToolBatchStarted` event MUST identify this metadata-only representation explicitly.
 Its consumer MUST reject a mismatched call set, authority context, or duplicate baseline.
-An identical duplicate MUST preserve the current checkpoint without another reset.
+An identical duplicate MUST preserve current live detector state without another reset.
 A new-format batch MUST retain its existing admission and recurrence evidence.
 
 #### Scenario: An old parked batch starts a new background job
 
 - **WHEN** a pre-change unanswered shell call receives valid approval
 - **THEN** the actor commits the original canonical task baseline before redrive
-- **AND** its start receipt commits the new job origin and checkpoint before continuation
+- **AND** its start receipt commits the new job origin before continuation
 
 #### Scenario: Recovery retains completed siblings
 
@@ -431,7 +432,7 @@ A new-format batch MUST retain its existing admission and recurrence evidence.
 #### Scenario: A baseline event repeats
 
 - **WHEN** an identical committed legacy baseline appears again after tool observations
-- **THEN** the consumer retains the current checkpoint and observations
+- **THEN** the consumer retains the current admission and observations
 - **AND** a changed baseline or a reset of new-format evidence fails explicitly
 
 #### Scenario: Approval state expires before a snapshot

@@ -41,7 +41,7 @@ Preparation evidence:
 - [x] 3.5 Atomically persist delivery dedup and continuation input; crash before/after admission and verify one pending input without child replay.
 - [x] 3.6 Materialize a fresh attributed provider tool-call/result pair; inspect actual messages and verify the original start call receives no second result.
 - [x] 3.7 Preserve original authority and compatible journal-order queues; verify another speaker and active compaction cannot change result authority.
-- [x] 3.8 Retain and refresh parent detector checkpoints in the child run ledger. Verify committed start settlement and direct activation without fabricated receipts. Verify late results after fresh input, sibling checkpoint updates, distinct-task separation, receipt failure, and recovery. Preserve current parent directory/project/branch.
+- [x] 3.8 Retain durable child run delivery facts without parent detector checkpoints. Verify committed start settlement and direct activation without fabricated receipts. Verify late results after fresh input, sibling delivery records, distinct-run separation, recovery, and current parent directory/project/branch preservation.
 - [x] 3.9 Keep failed parent continuations visible. Verify committed input is not readmitted and the model receives retained loss facts before it chooses further work.
 
 ## 4. Every routed start and deferred parent controls

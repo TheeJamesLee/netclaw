@@ -7,13 +7,14 @@ The summary SHALL provide machine-actionable run IDs and the exact deferred cont
 It SHALL identify recorded state and distinguish cancellation admission from local dispatch closure.
 It SHALL NOT expose hidden child task text, unsafe paths, or another session's run details.
 It SHALL NOT claim live provider state that the owner did not observe.
-Terminal child admission SHALL preserve the original task's recurrence state and current parent directory/project/branch facts.
-The durable child run ledger SHALL retain parent detector checkpoints independently from the session's current task checkpoint.
-Fresh input SHALL NOT replace evidence required by an outstanding child continuation.
-The first durable consumption of a canonical child result SHALL start a fresh recurrence window with the retained original-task ID.
-It SHALL preserve original authority and sticky receipt failure before the next model request.
-Recovery and duplicate adoption SHALL restore the current committed window without another reset.
-Legacy child adoption records SHALL retain their prior checkpoint restoration semantics.
+Terminal child admission SHALL preserve original authority and current parent directory/project/branch facts.
+The durable child run ledger SHALL retain accepted run identity, status, terminal receipt, and delivery markers.
+The durable child run ledger SHALL NOT retain parent detector checkpoints.
+Fresh input SHALL NOT replace durable facts required by an outstanding child continuation.
+The first durable consumption of a canonical child result SHALL start a fresh in-memory recurrence window for that continuation.
+It SHALL preserve original authority before the next model request.
+Recovery and duplicate adoption SHALL preserve delivered-once state without restoring prior detector state.
+Legacy child adoption records SHALL use recorded context without checkpoint restoration.
 Confirmed child file activity SHALL merge through the existing working-context rules.
 
 #### Scenario: A later turn can inspect its earlier child
@@ -32,7 +33,7 @@ Confirmed child file activity SHALL merge through the existing working-context r
 
 #### Scenario: Result admission does not reset recurrence evidence
 
-- **GIVEN** the original parent task retains unresolved recurrence evidence
+- **GIVEN** the live parent task retains unresolved recurrence evidence
 - **WHEN** a child completion admits an internal continuation
-- **THEN** it preserves that task identity and evidence under the first PR's contract
+- **THEN** it does not alter that live evidence before durable consumption
 - **AND** admission creates no fresh window or authorized task solely from child text

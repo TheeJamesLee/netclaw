@@ -362,29 +362,27 @@ The pair SHALL represent framework result delivery, not a new tool request or au
 Child text SHALL NOT become trusted automation input, a user instruction, a grant, or an approval prompt answer.
 Progress and status changes SHALL NOT start parent model turns.
 Terminal results SHALL queue in journal order after the active parent turn or compaction.
-Only results with compatible original authority and the same original detector task identity SHALL coalesce.
-Internal admission SHALL preserve PR 1's detector identity and retained evidence.
-The owner SHALL retain the parent `ToolLoopCheckpoint` and receipt-failure fact in the durable child run ledger.
-These facts SHALL remain separate from child partial-result checkpoints and actor-local child detector state.
-The checkpoint's `TaskId` SHALL identify the detector task independently from `TurnContextRecord.TurnId`.
-Committed parent admissions and results SHALL refresh outstanding runs that belong to the same detector task.
-For tool-based starts, continuation restoration SHALL wait until the original batch settles and commits its detector evidence.
+Only results with compatible original authority and durable run ownership SHALL coalesce.
+Internal admission SHALL preserve the accepted run context and delivery lineage.
+The owner SHALL retain child run identity, original context, start settlement state, terminal receipt, and delivery markers in the durable child run ledger.
+The owner SHALL NOT retain parent loop-detector checkpoints, receipt-failure facts, or detector-task evidence in that ledger.
+Child partial-result checkpoints SHALL remain durable run evidence, not parent loop-detector state.
+For tool-based starts, continuation restoration SHALL wait until the original batch settles and commits its child acceptance result.
 A normal batch SHALL include the start receipt and completed feedback round.
-A missing mandatory receipt SHALL retain the receipt-failure fact and invoke PR 1's terminal settlement without another model request.
-Direct activation SHALL retain canonical task evidence without a fabricated tool receipt.
-Parent completion and fresh input SHALL retain evidence required by outstanding child continuations.
-Sibling runs SHALL use the latest retained parent checkpoint for their task.
-Canonical continuation adoption SHALL validate the accepted run and commit its recurrence window before the next model request.
-The first durable consumption of a canonical child result SHALL start a fresh recurrence window with the retained detector `TaskId`.
-It SHALL clear exact entries, adjacent history, cold keys, and the last blocked action.
-It SHALL preserve original authority, receipt failure, and current parent directory/project/branch facts.
-It SHALL refresh every same-task child and job checkpoint copy through the existing ledger update.
-Acceptance, status, terminal preparation, delivery admission, recovery, and duplicate consumption SHALL NOT start that window.
+A missing mandatory receipt SHALL invoke terminal settlement without another model request.
+Direct activation SHALL retain the canonical original context without a fabricated tool receipt.
+Parent completion and fresh input SHALL retain durable run and delivery records required by outstanding child continuations.
+Sibling runs SHALL keep separate durable run records without shared parent detector checkpoints.
+Canonical continuation adoption SHALL validate the accepted run before the next model request.
+The first durable consumption of a canonical child result SHALL start a fresh in-memory recurrence window for that continuation.
+It SHALL preserve original authority and current parent directory/project/branch facts.
+It SHALL NOT refresh child or job detector checkpoint copies in durable ledgers.
+Acceptance, status, terminal preparation, delivery admission, recovery, and duplicate consumption SHALL NOT start that live window.
 A duplicate adoption SHALL use durable adopted context and input IDs, even when compaction removes the delivery pair.
-Legacy adoption events without the new window marker SHALL retain their original checkpoint restoration semantics.
-The synthetic delivery pair SHALL NOT clear receipt failure or reopen the completed start call.
-Delivery completion SHALL retain evidence required by another outstanding run.
-Recovery SHALL preserve these facts without child relaunch or a fresh-task reset.
+Legacy adoption events without the new window marker SHALL use recorded context and input IDs without restoring parent detector state.
+The synthetic delivery pair SHALL NOT create an execution receipt or reopen the completed start call.
+Delivery completion SHALL retain durable facts required by another outstanding run.
+Recovery SHALL preserve these durable facts without child relaunch or duplicate delivery.
 
 #### Scenario: Result delivery uses a fresh paired correlation
 
@@ -400,48 +398,48 @@ Recovery SHALL preserve these facts without child relaunch or a fresh-task reset
 - **THEN** the text creates no grant or approval prompt answer
 - **AND** the actual pending approval prompt remains authoritative
 
-#### Scenario: Fresh parent input preserves a child's original detector task
+#### Scenario: Fresh parent input preserves a child's original authority
 
 - **GIVEN** task A accepted a child and committed its start receipt and feedback round
 - **AND** the parent completed A and admitted fresh user task B
 - **WHEN** the owner adopts the child's later result continuation
-- **THEN** its first durable consumption commits a fresh window with A's retained task ID and receipt-failure fact
-- **AND** it uses the child's original authority without a fresh detector task
+- **THEN** its first durable consumption starts a fresh in-memory window under the child's original authority
+- **AND** it uses the accepted run context without restoring durable detector state
 
-#### Scenario: Sibling results use the latest shared task evidence
+#### Scenario: Sibling results keep separate delivery records
 
-- **GIVEN** task A accepted two children and later committed additional detector evidence
+- **GIVEN** task A accepted two children
 - **WHEN** either child result starts a continuation
-- **THEN** its first durable consumption starts a fresh window with A's retained detector task identity
-- **AND** its completion retains evidence required by the other child
+- **THEN** its first durable consumption starts a fresh in-memory window for that continuation
+- **AND** its completion retains durable delivery facts required by the other child
 
-#### Scenario: Equal authority cannot merge distinct detector tasks
+#### Scenario: Equal authority cannot merge distinct child deliveries
 
-- **GIVEN** one requester owns child runs from distinct detector tasks A and B
+- **GIVEN** one requester owns child runs from distinct accepted run records
 - **WHEN** their terminal results await parent continuation
-- **THEN** the owner keeps separate continuation groups and parent checkpoints
-- **AND** equal authority alone cannot merge their detector evidence or authorize a new window
+- **THEN** the owner keeps separate continuation groups and delivery records
+- **AND** equal authority alone cannot merge delivery ownership or authorize a new window
 
 #### Scenario: A child result permits a new artifact read
 
 - **GIVEN** the parent received recurrence feedback for an absent child artifact
 - **WHEN** it first durably consumes the canonical child result after the child writes that artifact
 - **THEN** its next authorized read uses a fresh recurrence window
-- **AND** the same task ID, original authority, and receipt failure remain authoritative
+- **AND** the original authority and delivery identity remain authoritative
 
-#### Scenario: Duplicate adoption after compaction preserves the current window
+#### Scenario: Duplicate adoption after compaction does not create a second window
 
-- **GIVEN** durable child adoption and later recurrence evidence
+- **GIVEN** durable child adoption and later live recurrence evidence
 - **AND** compaction removes the original delivery pair from the transcript
 - **WHEN** the same canonical adoption appears again or the owner recovers
-- **THEN** durable adopted context and input IDs preserve the current checkpoint
-- **AND** the runtime grants no second window
+- **THEN** durable adopted context and input IDs preserve delivered-once status
+- **AND** recovery does not restore prior detector state or grant a second window
 
-#### Scenario: Recovery cannot erase a retained receipt failure
+#### Scenario: Recovery preserves a durable child result without detector state
 
-- **GIVEN** an outstanding child run retains its parent task's receipt-failure fact
+- **GIVEN** an outstanding child run has a durable terminal receipt
 - **WHEN** recovery restores that run and admits its result continuation
-- **THEN** the original detector task and receipt failure remain authoritative
+- **THEN** the original authority and delivery marker remain authoritative
 - **AND** the delivery pair creates no execution receipt or child relaunch
 
 #### Scenario: An early terminal result waits for the start batch
@@ -455,7 +453,7 @@ Recovery SHALL preserve these facts without child relaunch or a fresh-task reset
 
 - **GIVEN** direct slash activation accepted a child without a parent tool call
 - **WHEN** its terminal result admits a continuation
-- **THEN** the owner retains the canonical original detector evidence
+- **THEN** the owner uses the canonical original authority
 - **AND** it fabricates no start receipt or completed tool feedback round
 
 #### Scenario: A different speaker does not replace original authority

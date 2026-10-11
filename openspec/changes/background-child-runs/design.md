@@ -278,7 +278,7 @@ Provider compatibility tests must inspect the actual paired messages.
 
 Review can run after the active parent turn or compaction finishes.
 Use a stable queue in terminal journal order.
-Coalesce only records with compatible original authority and the same original detector task identity.
+Coalesce only records with compatible original authority and durable run ownership.
 Progress and status changes do not start model turns. Terminal receipt schedules one attributed continuation.
 Parent continuation failure remains visible through run status and the existing turn-failure path.
 Do not automatically retry completed external effects or relaunch children.
@@ -287,56 +287,52 @@ If enrichment fails, retain the original terminal outcome and expose a delivery 
 The framework can admit a bounded factual result from that durable receipt without a model or unsafe path inference.
 Failed persistence remains an explicit undelivered state until recovery or a recorded retry succeeds.
 
-#### Parent detector evidence remains separate from child partial results
+#### Parent detector state remains in memory
 
-The owner stores parent detector evidence in the already planned durable child run ledger.
-Reuse `ToolLoopCheckpoint` and the existing receipt-failure fact. Do not add another task ledger or use shell-job records for children.
-These facts differ from the child's partial-result checkpoint and its actor-local detector state.
-The checkpoint's `TaskId` identifies the original detector task. Do not derive it from `TurnContextRecord.TurnId`.
-Delivery authority can identify a later continuation while its detector task still identifies the original causal task.
-`HasSameAuthority` alone cannot establish detector identity.
+The owner stores child run identity, original context, start settlement state, terminal receipt, and delivery markers in the durable child run ledger.
+It does not store parent detector checkpoints, receipt-failure facts, or detector-task evidence there.
+Child partial-result checkpoints are durable run evidence, not parent loop-detector state.
+Delivery authority identifies a later continuation through durable run ownership and original context.
+`HasSameAuthority` alone cannot establish delivery ownership.
 
-Committed parent admissions and results refresh outstanding runs that belong to the same detector task.
-For tool-based starts, continuation restoration waits until the original batch settles and commits its detector evidence.
+For tool-based starts, continuation restoration waits until the original batch settles and commits its child acceptance result.
 A normal batch includes the start receipt and completed feedback round.
-A missing mandatory receipt retains the receipt-failure fact and invokes PR 1's terminal settlement without another model request.
-Direct activation retains canonical task evidence without a fabricated tool receipt.
-Parent completion and fresh input retain evidence that an outstanding child continuation needs.
-Sibling runs use the latest retained parent checkpoint for their task.
-The first durable canonical child consumption starts a fresh recurrence window under the retained detector task identity.
-The owner preserves original authority and sticky receipt failure.
-It clears exact entries, adjacent history, cold keys, and the last blocked action.
-It refreshes same-task child and job checkpoint copies through `RefreshJobEvidence`.
-Acceptance, status, terminal preparation, and delivery admission cannot reset the window.
+A missing mandatory receipt invokes terminal settlement without another model request.
+Direct activation retains canonical original context without a fabricated tool receipt.
+Parent completion and fresh input retain durable records that an outstanding child continuation needs.
+Sibling runs keep separate durable run records and share no parent detector checkpoint.
+The first durable canonical child consumption starts a fresh in-memory recurrence window for that continuation.
+The owner preserves original authority and current parent directory/project/branch facts.
+It does not refresh child or job detector checkpoint copies in durable ledgers.
+Acceptance, status, terminal preparation, and delivery admission cannot start that live window.
 Durable adopted context and input IDs reject a second reset after duplicate adoption or compaction.
-Recovery restores the current committed window.
+Recovery preserves durable delivery facts without restoring prior detector state.
 An additive `ToolTaskAdopted` Boolean records this decision. Missing legacy values remain false and retain old replay semantics.
-The synthetic delivery pair supplies no execution receipt. It cannot clear receipt failure or reopen the completed start call.
+The synthetic delivery pair supplies no execution receipt. It cannot reopen the completed start call.
 
 Schematic; authorization, admission, and persistence failure paths are abbreviated:
 
 ```text
 Parent task A accepts child X
-  -> run ledger retains A's ToolLoopCheckpoint and receipt-failure fact
-Committed A admission or result
-  -> refresh every outstanding run whose checkpoint TaskId matches A
+  -> run ledger retains X's accepted identity, original context, and delivery markers
+Committed A start settlement
   -> tool start: wait for the original batch's committed settlement
   -> normal settlement: retain the start receipt and completed round
-  -> missing mandatory receipt: retain failure; settle without another model request
-  -> direct activation: retain canonical task evidence without a fabricated receipt
+  -> missing mandatory receipt: settle without another model request
+  -> direct activation: retain canonical original context without a fabricated receipt
 Parent completes A; fresh user task B starts
-  -> retain A's evidence in X; keep B's current checkpoint separate
+  -> retain X's durable run facts; keep B's live detector state separate
 Child X terminal receipt
   -> admit one attributed continuation through durable delivery
-  -> validate X; first durable consumption starts a new window under A with sticky receipt failure
+  -> validate X; first durable consumption starts a fresh in-memory window for X
   -> if evidence permits, request the model under X's original authority
 Continuation completes
-  -> settle only this delivery; retain evidence for outstanding siblings
+  -> settle only this delivery; retain durable facts for outstanding siblings
 ```
 
-Positive example: two children from A share its latest committed checkpoint before either continuation requests the model.
+Positive example: two children from A keep separate delivery records before either continuation requests the model.
 Negative example: children from A and B cannot coalesce solely because the same requester owns both tasks.
-Recovery preserves the current committed window without child relaunch or another reset.
+Recovery preserves durable delivery facts without child relaunch or another reset.
 Result admission preserves the parent's current directory, project, and branch.
 
 ### 8. Original approval prompts remain run-owned
@@ -356,7 +352,7 @@ The documentation term becomes **approval prompt**. Code identifiers such as `To
 
 ### 9. Recovery, upgrade, and rollback do not replay a child
 
-Snapshot and journal recovery preserve acceptance keys, original contexts, parent detector evidence, child partial checkpoints, terminal receipts, and delivery markers.
+Snapshot and journal recovery preserve acceptance keys, original contexts, child partial checkpoints, terminal receipts, and delivery markers.
 After recovery, an accepted run without a durable terminal receipt becomes `Lost` exactly once.
 A previously admitted cancellation remains `Cancelled` with retained evidence; recovery does not replace it with successful output.
 Recovered child prompts receive visible expired/cancelled disposition.

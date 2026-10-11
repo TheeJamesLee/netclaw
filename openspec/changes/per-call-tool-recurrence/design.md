@@ -409,30 +409,27 @@ The manager carries its stored origin in the existing trusted delivery source.
 It does not derive an origin from result text.
 
 `ToolCallRecorded` persists the started `ActiveJobInfo` before the actor continues.
-That existing job record retains its origin and the matching `ToolLoopCheckpoint`.
-Admission and completed-result application refresh records that match the current recurrence task.
-A fresh task preserves those records before it replaces the current checkpoint.
-Two jobs from one task share immutable checkpoint references in memory.
-Their snapshot representations can repeat those bytes.
+That existing job record retains its origin.
+A fresh task preserves those records without copying detector state.
+Two jobs from one task keep separate job records with the same origin facts.
 The records remain until their existing job lifecycle removes them.
 No count cap discards their pinned evidence.
 
 A delivery matches the framework job key, session, and stored origin.
 `ToolTaskAdopted` names that job key only for a validated internal continuation.
-Its consumer validates the committed job record before it restores the origin checkpoint.
+Its consumer validates the committed job record before it accepts the delivery.
 The event retains the canonical automation authority of the admitted delivery.
-The detector uses the checkpoint's origin `TurnId` independently from that authority context's `TurnId`.
-The actor commits the restored checkpoint before the next model request.
-The terminal delivery event removes the job record only after that commit.
+The actor starts any needed recurrence tracking as live in-memory state before the next model request.
+The terminal delivery event removes the job record only after delivery commit.
 A duplicate delivery uses the existing deduplication contract.
 
 A fast job result remains buffered until the parent commits its start receipt.
 A crash after process launch can precede that receipt commit.
 A new-format delivery without its mandatory committed parent record causes an explicit contract failure.
 The runtime preserves known results and settles without a new model request.
-It does not rerun the process or substitute the current checkpoint.
+It does not rerun the process or substitute current detector state.
 Only a genuinely pre-change job can use the explicit legacy evidence-gap baseline.
-A forged, stale, or foreign origin cannot restore a checkpoint.
+A forged, stale, or foreign origin cannot validate delivery.
 
 Verification includes fast completion, the launch/receipt crash, duplicate delivery, a fresh-user task switch, two jobs, and invalid origins.
 
@@ -449,11 +446,11 @@ The consumer compares those existing representations explicitly.
 It does not strip or infer a prefix from result text.
 `InputAdmitted` persists the trusted closed origin and format version because `SendUserMessage.Source` is ephemeral.
 A terminal delivery removes only its own prefixed entry.
-Other jobs retain their checkpoints until their existing lifecycle ends.
+Other jobs retain their origin records until their existing lifecycle ends.
 
 An invalid delivery settles only its own admitted input.
 The actor commits `InputClosed` with that input ID and canonical authority `TurnId`.
-The actor preserves another active task, its checkpoint, and every later pending input.
+The actor preserves another active task and every later pending input.
 It emits a bounded explicit contract-failure report through the normal text renderer.
 It does not emit `TurnCompleted` for another active user task.
 At Ready it does not activate the invalid delivery.
@@ -493,7 +490,7 @@ Before its first redrive, the actor prepares only unanswered calls from the park
 The actor commits that baseline before tool dispatch.
 Completed siblings retain their results and never receive a new invocation.
 Historical results receive no fabricated receipt or detector observation.
-A new-format batch retains its existing admission and checkpoint.
+A new-format batch retains its existing admission and live recurrence evidence.
 
 The existing `ToolBatchStarted` consumer also appends history and restores batch bookkeeping.
 Its fields cannot safely describe a metadata-only baseline across deserialized list payloads.
@@ -501,7 +498,7 @@ An additive `MetadataOnly` flag names that missing representation on the existin
 Its consumer validates the original approval context and exact unanswered call identities before state application.
 The event does not consume input IDs, append user or assistant messages, or replay completed effects.
 A genuine legacy baseline requires absent admission and empty detector evidence.
-An identical duplicate leaves the current checkpoint unchanged.
+An identical duplicate leaves current live detector state unchanged.
 A mismatched duplicate or an attempted reset of new-format evidence is a contract failure.
 The baseline retains the original approval requester, scope, and authorization attempt.
 Verification covers journal replay, snapshot recovery, completed siblings, and duplicate redrive.
