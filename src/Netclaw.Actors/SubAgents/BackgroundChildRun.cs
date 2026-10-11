@@ -36,6 +36,7 @@ public sealed record BackgroundChildRun
     public required TurnContextRecord OriginalContext { get; init; }
     public required IReadOnlyList<InputId> OriginInputIds { get; init; }
     public required WorkingContextSnapshot InitialWorkingSnapshot { get; init; }
+    public bool ParentReceiptFailure { get; init; }
     public bool StartBatchSettled { get; init; }
     public long AcceptedAtMs { get; init; }
     public long? StartedAtMs { get; init; }

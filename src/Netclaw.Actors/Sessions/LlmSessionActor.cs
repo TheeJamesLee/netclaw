@@ -2681,6 +2681,7 @@ public sealed partial class LlmSessionActor : ReceivePersistentActor, IWithTimer
             BindTurnTelemetry(context);
             _toolApprovals.StartTurn(context);
             _currentTrustContext = _trustContextDeriver?.DeriveFromTurnContext(context);
+            _turnState.ResetForNewTurn();
             if (admitted.SourceBackgroundJobId is not null && admitted.BackgroundJobLineageVersion == 0)
                 _log.Warning("Tool cycle evidence gap kind={Kind}", "legacy_job_origin");
             continuation();

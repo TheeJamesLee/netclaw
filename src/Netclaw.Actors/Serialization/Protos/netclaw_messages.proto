@@ -303,7 +303,8 @@ message ActiveJobInfoProto {
   string output_log_path = 8;
   int32 lineage_version = 9;
   BackgroundJobOriginProto origin = 10;
-  reserved 11, 12;
+  reserved 11;
+  bool origin_receipt_failure = 12;
 }
 
 message SessionSnapshotProto {
@@ -447,7 +448,8 @@ message BackgroundChildRunProto {
   repeated string origin_input_ids = 11;
   WorkingContextProto initial_working_context = 12;
   GitWorkingContextInspectionProto initial_git = 13;
-  reserved 14, 15;
+  reserved 14;
+  bool parent_receipt_failure = 15;
   bool start_batch_settled = 16;
   int64 accepted_at_ms = 17;
   optional int64 started_at_ms = 18;

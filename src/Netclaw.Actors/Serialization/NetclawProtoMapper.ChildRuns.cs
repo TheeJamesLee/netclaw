@@ -38,6 +38,7 @@ internal static partial class NetclawProtoMapper
             AgentName = run.AgentName.Value, SourceOperation = run.SourceOperation, ArgumentsDigest = run.ArgumentsDigest,
             OriginalContext = ToProto(run.OriginalContext), InitialWorkingContext = ToProto(run.InitialWorkingSnapshot.WorkingContext),
             InitialGit = ToProto(run.InitialWorkingSnapshot.Git),
+            ParentReceiptFailure = run.ParentReceiptFailure,
             StartBatchSettled = run.StartBatchSettled, AcceptedAtMs = run.AcceptedAtMs
         };
         if (run.StartedAtMs is { } started) proto.StartedAtMs = started;
@@ -90,6 +91,7 @@ internal static partial class NetclawProtoMapper
             {
                 WorkingContext = FromProto(proto.InitialWorkingContext), Git = FromProto(proto.InitialGit)
             },
+            ParentReceiptFailure = proto.ParentReceiptFailure,
             StartBatchSettled = proto.StartBatchSettled, AcceptedAtMs = proto.AcceptedAtMs,
             StartedAtMs = proto.HasStartedAtMs ? proto.StartedAtMs : null,
             CancellationRequestedAtMs = proto.HasCancellationRequestedAtMs ? proto.CancellationRequestedAtMs : null,
