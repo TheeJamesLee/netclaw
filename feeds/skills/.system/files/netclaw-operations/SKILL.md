@@ -3,7 +3,7 @@ name: netclaw-operations
 description: "REQUIRED when the user asks about schedules, reminders, cron jobs, timers, background jobs, or child status and cancellation. Also use for diagnostics, troubleshooting, MCP tools, daemon health, identity updates, Netclaw capabilities, and maintenance."
 metadata:
   author: netclaw
-  version: "2.112.0"
+  version: "2.113.0"
 ---
 
 # Netclaw Operations

@@ -28,10 +28,10 @@ Key facts to share with the operator:
 - Default Mattermost login for the demo's non-admin test user:
   `testuser` / `TestUser1234!`. Admin is `admin` / `Admin1234!`.
 - The demo launches the `fast` profile by default. It keeps the seeded
-  Mattermost channel on the `public` audience, caps tool loops
-  aggressively, disables Ollama thinking mode, tunes Ollama for
-  single-user local inference, and prewarms the model before the
-  daemon starts.
+  Mattermost channel on the `public` audience, disables Ollama thinking
+  mode, tunes Ollama for single-user local inference, and prewarms the
+  model before the daemon starts. It uses Netclaw's exact in-memory
+  recurrence guard and sets no tool-iteration cap.
 - For the heavier tool-rich path, opt into
   `NETCLAW_DEMO_PROFILE=full dotnet run --project samples/Netclaw.Demo.AppHost`.
 - Daemon binds `127.0.0.1:5299` (not the production default 5199, so
