@@ -118,8 +118,7 @@ public sealed partial record SessionState
         foreach (var input in prefix)
         {
             var sibling = GetChildContinuation(input);
-            if (!SameCanonicalContext(sibling.OriginalContext, run.OriginalContext)
-                || sibling.ParentReceiptFailure != run.ParentReceiptFailure)
+            if (!SameCanonicalContext(sibling.OriginalContext, run.OriginalContext))
                 throw new InvalidDataException("A child prefix merges distinct parent tasks.");
         }
         if (ParkedToolBatchHistory.FindRedrivableAssistantMessage(History, null) is not null)
@@ -146,12 +145,9 @@ public sealed partial record SessionState
         {
             History = history,
             AdoptedTaskContext = run.OriginalContext, AdoptedTaskInputIds = evt.InputIds,
-            LoopReceiptFailure = evt.StartsChildContinuationWindow
-                ? LoopReceiptFailure || run.ParentReceiptFailure
-                : run.ParentReceiptFailure,
             LoopAdmission = null, LoopObservations = []
         };
-        return evt.StartsChildContinuationWindow ? next.RefreshJobEvidence() : next;
+        return next;
     }
 
     private void ValidateConsumedChildPairs(ToolTaskAdopted evt)

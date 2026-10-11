@@ -134,8 +134,10 @@ public sealed partial class BackgroundChildOwnerAdversarialTests
                 _ => Array.Empty<InputId>()
             }).Where(deliveryIds.Contains);
             Assert.Equal(deliveryIds, consumed);
-            Assert.Equal(receiptFailure ? ToolCycleMessages.MissingReceipt : ToolCycleMessages.Final, final.AssistantReply.Content);
-            Assert.Equal(oldModelCount + (receiptFailure ? 1 : 5), _main.CallCount);
+            // The receipt-failure flag is in-memory only. The fresh task resets it,
+            // so both deliveries settle the same terminal way.
+            Assert.Equal(ToolCycleMessages.Final, final.AssistantReply.Content);
+            Assert.Equal(oldModelCount + 5, _main.CallCount);
             Assert.Equal(new[] { "probe-1", "probe-2" }, _start.ProbeCallIds.Where(id => id.StartsWith("probe-", StringComparison.Ordinal)));
             Assert.Equal(1, _child.CallCount);
             Assert.Equal(1, _secondChild.CallCount);

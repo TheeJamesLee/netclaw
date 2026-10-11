@@ -116,8 +116,7 @@ public sealed partial record SessionState
             throw new InvalidDataException("A child acceptance contains facts from a later lifecycle stage.");
         if (evt.SessionId != run.StartKey.SessionId || AdoptedTaskContext is null
             || !SameCanonicalContext(AdoptedTaskContext, run.OriginalContext)
-            || !AdoptedTaskInputIds.SequenceEqual(run.OriginInputIds)
-            || run.ParentReceiptFailure != LoopReceiptFailure)
+            || !AdoptedTaskInputIds.SequenceEqual(run.OriginInputIds))
             throw new InvalidDataException("A child acceptance differs from the canonical parent task.");
         if (ChildRuns.ContainsKey(run.RunId) || ChildRuns.Values.Any(existing => existing.StartKey == run.StartKey))
             throw new InvalidDataException("A child acceptance repeats an already committed start identity.");
@@ -163,21 +162,18 @@ public sealed partial record SessionState
         }
         if (!SameCanonicalContext(evt.TurnContext, prefix[^1].TurnContext))
             throw new InvalidDataException("An adopted task does not use the latest admitted prefix context.");
-        var receiptFailure = false;
         if (prefix[^1].SourceBackgroundJobId is { } jobId)
         {
-            var validLineage = TryGetBackgroundContinuation(prefix[^1], out var job, out var lineageReason);
+            var validLineage = TryGetBackgroundContinuation(prefix[^1], out _, out var lineageReason);
             if (prefix.Length != 1 || evt.ContinuedJobKey != jobId.Value || !validLineage)
                 throw new InvalidDataException($"A task cannot continue its job lineage: {lineageReason}");
-            if (job is not null)
-                receiptFailure = job.OriginReceiptFailure;
         }
         else if (evt.ContinuedJobKey is not null)
             throw new InvalidDataException("A non-job input cannot restore a job checkpoint.");
         return this with
         {
             AdoptedTaskContext = evt.TurnContext, AdoptedTaskInputIds = evt.InputIds,
-            LoopAdmission = null, LoopObservations = [], LoopReceiptFailure = receiptFailure
+            LoopAdmission = null, LoopObservations = [], LoopReceiptFailure = false
         };
     }
 
@@ -232,10 +228,9 @@ public sealed partial record SessionState
             if (started.LineageVersion != 1 || started.Origin is null
                 || started.Origin.TurnId.Value != admission.TaskId || started.Origin.CallId.Value != observation.CallId)
                 throw new InvalidDataException("A started job differs from canonical parent admission.");
-            started.Origin.Validate();
-            owner = TrackBackgroundJob($"{BackgroundJobManagerActor.JobDeliveryKeyPrefix}{started.JobId.Value}",
-                started with { OriginReceiptFailure = LoopReceiptFailure });
-        }
+        started.Origin.Validate();
+        owner = TrackBackgroundJob($"{BackgroundJobManagerActor.JobDeliveryKeyPrefix}{started.JobId.Value}", started);
+    }
     var observations = LoopObservations.Add(observation);
     var next = owner with { LoopObservations = observations,
         LoopReceiptFailure = LoopReceiptFailure || observation.MissingReceipt };
@@ -282,12 +277,6 @@ public sealed partial record SessionState
 
     private SessionState RefreshJobEvidence()
     {
-        var jobs = ActiveBackgroundJobs;
-        foreach (var (key, job) in jobs)
-        {
-            if (job.LineageVersion == 1)
-                jobs = jobs.SetItem(key, job with { OriginReceiptFailure = LoopReceiptFailure });
-        }
         var runs = ChildRuns;
         foreach (var (id, run) in runs)
         {
@@ -296,9 +285,9 @@ public sealed partial record SessionState
                           && LoopAdmission is { } admission
                           && admission.Calls.Any(call => call.CallId == tool.CallId.Value)
                           && admission.Calls.All(call => LoopObservations.Any(observation => observation.CallId == call.CallId));
-            runs = runs.SetItem(id, run with { ParentReceiptFailure = LoopReceiptFailure, StartBatchSettled = settled });
+            runs = runs.SetItem(id, run with { StartBatchSettled = settled });
         }
-        return this with { ActiveBackgroundJobs = jobs, ChildRuns = runs };
+        return this with { ChildRuns = runs };
     }
 
     internal static bool SameCanonicalContext(TurnContextRecord left, TurnContextRecord right)
