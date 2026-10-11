@@ -9,7 +9,7 @@
 Preparation evidence:
 
 - The branch inherits PR 1. This contract reconciliation leaves its existing runtime types unchanged.
-- Design section 7 assigns retained parent detector evidence to the planned child run ledger.
+- Design section 7 keeps the child ledger scoped to delivery and lineage evidence. It stores no parent detector state.
 - An independent review derives sixteen assertion groups, paired controls, and named faults from the deltas.
 - The [approved plan](../../../.systematize/plans/background-subagents/plan.html) owns the adversarial method and acceptance gates.
 - The original `2e6bc4f` capture already supplies conversation, original requester, and parent approval facts.

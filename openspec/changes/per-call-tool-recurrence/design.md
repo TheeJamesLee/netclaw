@@ -148,10 +148,12 @@ The PR exposes this limitation and verifies it explicitly.
 
 Pinned keys have no count or age eviction. Their total size can grow during a pathological task.
 Each entry remains fixed-size; counters saturate rather than overflow.
-Checkpoint events carry deltas for changed keys and explicit cold evictions.
-Snapshots contain the full retained state. Journal size grows with observations under the existing session persistence policy.
+The detector state is actor-local and in memory only.
+It resets when the active turn ends or the actor restarts.
+No session event, snapshot, or journal stores detector keys, counters, or closed observations.
+Journal size grows only from existing admission, result, adoption, and delivery records under the existing session persistence policy.
 The runtime cannot claim a fixed memory or spend guarantee for a task of unlimited duration.
-A resource or persistence failure must surface an error. It cannot silently erase evidence or restart the detector.
+A resource or persistence failure must surface an error. It cannot silently erase durable delivery facts or advance dispatch after failed persistence.
 No detector count becomes a hidden lifetime ceiling.
 
 Alternative: evict pinned keys at a fixed total size. This would clear known unresolved loops.
@@ -159,25 +161,28 @@ Alternative: retain all first observations forever. This would grow memory durin
 
 ### 5. Durable parent continuity
 
-The parent stores only framework-owned serialized detector evidence.
+The parent stores framework-owned admission, observation, adoption, and delivery records.
+It does not store detector state.
 It never journals `FunctionCallContent`, `ToolInvocationReceipt`, actor references, delegates, tasks, or raw detector payloads.
-The private journal can contain digests. Public diagnostics and checked-in evidence cannot contain private digests.
+The private journal can contain digests for durable records. Public diagnostics and checked-in evidence cannot contain private digests.
 
 Required data changes:
 
 - Add optional detector admission metadata to `ToolBatchStarted` for the round and prepared group identities.
 - Add optional closed detector observation metadata to `ToolCallRecorded` for category, outcome digest, synthetic provenance, and pending-job fact.
-- Carry checkpoint deltas on `ToolBatchStarted`; reconstruct completed evidence through typed `ToolCallRecorded` observations.
+- Do not carry detector continuity state on events.
 - Add `ToolTaskAdopted` with canonical admitted context and input identifiers; commit it at task consumption before continuation.
-- Add retained detector state to `SessionState` and `SessionSnapshot` with additive protocol fields and converters.
+- Keep detector state out of `SessionState` and `SessionSnapshot`.
 - Reuse the original admitted `TurnContextRecord.TurnId` as the task identity; retain it through automatic continuation and recovery.
 
 The actor persists admission before tool execution or synthetic feedback.
 It persists result evidence with the existing result event, before the result can advance the next model round.
-Typed result records reconstruct completed evidence before the next model request.
-The next admission persists its checkpoint delta before tool dispatch.
-Recovery applies checkpoints, then reconstructs any later incomplete checkpoint from durable admission and result evidence.
-It counts a fully paired round once. It does not fabricate missing receipts or replay completed side effects.
+The live detector consumes typed result records before the next model request while the actor remains active.
+The next admission persists no detector continuity record before tool dispatch.
+Recovery restores durable admission, result, adoption, and delivery records only.
+It starts the next turn with an empty detector baseline.
+While live, the detector counts a fully paired round once.
+It does not fabricate missing receipts or replay completed side effects.
 An interrupted partial batch retains existing completed result evidence without a false completed-group observation.
 
 Recovery restores the recorded session before the next model request.
@@ -187,17 +192,19 @@ It retains committed call/result pairs and uses the existing non-success closure
 It cannot invent successful results or automatically execute an unanswered call as a recovery action.
 A model-chosen retry passes the ordinary tool policy. This contract does not guarantee exactly-once external effects.
 
-A snapshot preserves the same retained state as journal replay.
-Automatic restart continuation restores the original task identity and detector state.
-A genuinely fresh authorized user input or scheduled task starts a new task and clears prior evidence at durable adoption.
+Snapshots preserve durable session, adoption, child delivery, and job lineage state.
+They do not contain detector state.
+Automatic restart continuation restores the original task identity without detector state.
+A genuinely fresh authorized user input or scheduled task starts a new task and a new empty live detector window at durable adoption.
 Ingress only records pending intent. Old batch results and approval attempts retain their original context until adoption.
 `ToolTaskAdopted` commits before a buffered continuation starts and derives its context from the canonical admitted record.
 The session uses the existing context deriver after adoption. It does not accept model-supplied authority.
-Recovery applies adoption once and retains its task identity; older pending work cannot overwrite its detector state.
+Recovery applies adoption once and retains its task identity; older pending work cannot overwrite that durable adoption state.
 Overflow replay, delivery retry, and restart notices do not constitute fresh tasks.
-The child retains equivalent actor-local state for its one task; restart still loses that child.
+The child retains only actor-local detector state for its one task; restart still loses that child.
 
-A captured pre-change record lacks detector evidence. Recovery starts an explicit empty baseline and records an upgrade evidence gap.
+A captured pre-change record lacks new admission or adoption metadata.
+Recovery preserves the old conversation and starts with an empty live detector baseline.
 It cannot retroactively infer trusted outcomes from old result text.
 It still preserves old conversation and approval state without a migration that replays tools.
 
@@ -355,8 +362,8 @@ The orchestration owner supplies the approved provider target outside commit and
 - [A valid external recheck resembles recurrence] -> Apply only the explicit typed pending-job exception before both guards.
 - [Pending-job polls remain unbounded] -> State the miss; use guidance and evals; defer a rate policy.
 - [Cold eviction misses distant repeats] -> Publish the exact horizon; never evict established suspicion.
-- [Pinned evidence and private journals grow] -> Use fixed-size entries and delta events; expose resource failures without a reset.
-- [Checkpoint races erase results] -> Persist typed evidence with each result; test every admission, result, and checkpoint cut point.
+- [Pinned evidence and durable records grow] -> Use fixed-size live entries and typed records; expose resource failures without a reset.
+- [Persistence races erase results] -> Persist typed evidence with each result; test admission, result, adoption, and delivery cut points.
 - [A missing receipt looks successful] -> Repair normal producers; settle an actual missing-receipt defect without another model request.
 - [Terminal summaries overstate progress] -> Use framework facts and a Partial child outcome.
 - [Removed ceilings expose semantic loops] -> Keep the agreed replay, shadow, sensitivity, and holdout merge gates.
@@ -366,7 +373,7 @@ The orchestration owner supplies the approved provider target outside commit and
 
 1. Review this exact contract before production edits.
 2. Add the deterministic reference corpus and independent adversarial assertions.
-3. Implement the shared detector, durable evidence, and runtime terminal path.
+3. Implement the shared detector, durable delivery records, and runtime terminal path.
 4. Remove both ceilings and update schema, docs, and operational guidance.
 5. Run the deterministic, replay, shadow, sensitivity, and targeted model gates.
 6. Review all failures, missing evidence, and private-data boundaries before the PR stack advances.
@@ -484,7 +491,7 @@ The actor does not infer unfinished work from a stale current context.
 
 ### Legacy approval redrive baseline
 
-A pre-change parked batch has no `LoopAdmission` or checkpoint.
+A pre-change parked batch has no recurrence admission metadata.
 Its existing pending approval owns the original canonical `TurnContext` and authorization attempt.
 Before its first redrive, the actor prepares only unanswered calls from the parked assistant message.
 The actor commits that baseline before tool dispatch.
@@ -497,7 +504,7 @@ Its fields cannot safely describe a metadata-only baseline across deserialized l
 An additive `MetadataOnly` flag names that missing representation on the existing event.
 Its consumer validates the original approval context and exact unanswered call identities before state application.
 The event does not consume input IDs, append user or assistant messages, or replay completed effects.
-A genuine legacy baseline requires absent admission and empty detector evidence.
+A genuine legacy baseline requires absent recurrence admission metadata and no active detector evidence.
 An identical duplicate leaves current live detector state unchanged.
 A mismatched duplicate or an attempted reset of new-format evidence is a contract failure.
 The baseline retains the original approval requester, scope, and authorization attempt.

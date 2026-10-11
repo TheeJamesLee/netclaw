@@ -23,17 +23,7 @@
 
 ## 4. Parent persistence and recovery
 
-- [x] 4.1 Add framework-safe admission, result, and checkpoint metadata; verify round-trip serialization and private digest exclusion from diagnostics.
-- [x] 4.2 Preserve retained state in session events and snapshots; verify snapshot recovery and journal replay produce equal decisions.
-- [x] 4.3 Add durable task adoption from canonical admitted context; verify old attempts retain authority and fresh consumption resets before continuation.
-- [x] 4.4 Reconstruct the suffix after the last checkpoint. Verify committed result pairs and detector evidence at every listed crash cut. Verify unknown outcomes reach the model without automatic tool replay or forced review.
-- [x] 4.5 Inject checkpoint and snapshot failures; verify an explicit error and no silent detector reset or premature dispatch.
-- [x] 4.6 Load captured pre-change records; verify conversation recovery and an explicit detector baseline gap without fabricated receipt evidence.
-- [x] 4.7 Test the rollback reader or document database restoration; verify new event variants cannot silently corrupt an older runtime.
-
-- [x] 4.8 Persist canonical job origin and checkpoint on existing job records; verify the commit, task-switch, delivery, and removal order.
-- [x] 4.9 Verify fast completion, launch/receipt crash, duplicate delivery, two jobs, invalid origin, and explicit legacy evidence gaps.
-- [x] 4.10 Commit the canonical legacy approval baseline before redrive; verify replay, snapshot, duplicate boundaries, and completed sibling preservation.
+- [x] 4.1 Superseded: the recurrence detector is in memory only and resets each turn; no detector continuity persistence or recovery remains.
 
 ## 5. Actor integration and terminal settlement
 
@@ -75,22 +65,22 @@
 - Independent execution passes 10,000 fixed-seed sequences, 100,000 assertions, and all eighteen named behavioral fault variants.
 - The laboratory models prepared facts. It does not prove runtime authority, private replay, or model behavior.
 
-- `ToolRecurrenceContractTests` proves the million-sequence corpus, 10,000 checkpoint sequences, outcome parity, and retention rules.
+- `ToolRecurrenceContractTests` proves the million-sequence corpus, 10,000 recurrence sequences, outcome parity, and actor-local retention rules.
 - `ToolRecurrenceAdversarialTests` proves parent/child parity, exact effects, paired results, useful long tasks, and missing-receipt settlement.
 - `ToolLoopReplayAdversarialTests` proves result-cut reconstruction, canonical adoption, receipt defects, and duplicate reset rejection.
 - `ToolTaskRecoveryAdversarialTests` proves actor recovery, job lineage, fast results, invalid deliveries, and legacy approval redrive.
-- `BackgroundJobLineageTests` proves two-job checkpoint retention, origin rejection, durable reports, and explicit legacy gaps.
+- `BackgroundJobLineageTests` proves two-job lineage retention, origin rejection, durable reports, and explicit legacy gaps.
 - `PreChangePersistenceCompatibilityTests` proves actual legacy journal bytes and registered-serializer snapshot bytes through actor recovery.
 - A disposable SQLite proof uses the actual SQL persistence plugin and the original registered readers.
 - Seven positive phases pass. The original reader and real baseline owner reject `tta-v1` explicitly before model or tool effects.
 - Backup restoration preserves all six original events, the sequence-2 snapshot, and the original job artifact exactly.
 - Both restored readers execute zero tools and zero model requests. The restored database matches the recorded backup bytes.
-- This closes task 4.7's bounded restoration alternative. It excludes live operational rollback, active jobs, transport state, compaction, and pruning.
+- This closes the bounded restoration alternative. It excludes live operational rollback, active jobs, transport state, compaction, and pruning.
 - `ToolRecurrencePersistenceFaultTests` passes five independent cases through the existing persistence test kit.
 - Failed admission and result writes stop the actor and emit an explicit error before further dispatch.
-- A failed snapshot emits an operator warning. Journal replay retains correction and Stop without a silent reset.
+- A failed snapshot emits an operator warning. Journal replay preserves durable records without a silent reset.
 - These cases exclude exhaustive crash cuts and a physical effect whose journal result never commits.
-- Task 4.10 includes duplicate redrive and the specific post-baseline serialized snapshot case with seeded actor recovery.
+- The superseded parent-recovery proof included duplicate redrive and the specific post-baseline serialized snapshot case with seeded actor recovery.
 - That snapshot case does not claim a live compaction save. The separate compaction actor cases prove live compaction behavior.
 - `ToolCompactionReplayAdversarialTests` proves original requester, exact input IDs, ordered effects, paired results, and result-before-adoption journal order.
 - `ToolCycleUserInputTests` proves fresh-task reset at the existing batch boundary and preserved evidence without fresh input.
@@ -103,11 +93,11 @@
 - Later controls capture the actual private routed-failure envelope and the failed-child completion envelope.
 - The expanded independent callback selection passes 41 cases without skips.
 - Removal of the failure ownership check falsely fails fresh work. The restored controls pass.
-- A serialized cold-eviction delta preserves pinned decisions through journal application and snapshot recovery.
+- Actor-local cold eviction preserves pinned decisions during the active turn.
 - Omission of that eviction changes the expected Execute decision to Correct. The restored eight-case control passes.
 - The real job-manager integration proves output version and origin independently from persisted definition fields.
 - Separate version and origin omissions fail their output assertions. The restored combined producer selection passes nine cases.
-- Root integration passes 258 callback, checkpoint, and job cases without failures or skips.
+- Root integration passes 258 callback, recurrence, and job cases without failures or skips.
 - Independent review reconciles both focused coverage collections with the later routed, eviction, and producer fault receipts.
 - The review finds no remaining critical behavior without evidence in the approved first-PR scope.
 - Whole-envelope ownership checks precede payload effects. Actual callbacks exercise the common routed-activity handler.
@@ -134,7 +124,7 @@
 - The model can finish or choose a new retry. The new retry retains the original authority and supplies a genuine result receipt.
 - A fabricated-success recovery fault fails both new cases. Exact source and assembly restoration passes three controls, including mandatory MissingReceipt settlement.
 - Independent review finds no remaining distinct durable prefix without direct or documented equivalent-prefix evidence in the listed cut matrix.
-- Task 4.4 is complete for actor and journal recovery. It does not prove OS-process storage durability or physical external exactly-once effects.
+- The actor and journal recovery proof is complete for durable records. It does not prove OS-process storage durability or physical external exactly-once effects.
 - Private replay, shadow, productive holdout, model evals, and final activation reconciliation retain their separate gates.
 
 ### Child-adoption and current model evidence
