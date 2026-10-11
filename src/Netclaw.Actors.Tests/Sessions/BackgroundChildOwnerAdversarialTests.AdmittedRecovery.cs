@@ -107,8 +107,12 @@ public sealed partial class BackgroundChildOwnerAdversarialTests
             recoveredResponse.TrySetResult();
             await CompletedAsync(recoveredSubscriber);
             var final = await ReadJournalPositionsAsync();
-            AssertAdmittedRecoverySettlement(final, delivery, accepted.Run, ["prefix-probe-1", "prefix-probe-2"]);
-            Assert.Equal(7, _main.CallCount);
+            AssertAdmittedRecoveryAuthority(final, delivery, accepted.Run);
+            // The loop detector is in-memory only. The restart resets the recurrence window,
+            // so the third prefix occurrence is a fresh occurrence and is executed, not refused.
+            Assert.Equal(new[] { "prefix-probe-1", "prefix-probe-2", "prefix-refused-3", "prefix-stopped-4" },
+                _start!.ProbeCallIds);
+            Assert.Equal(8, _main.CallCount);
         }
         finally
         {
@@ -206,8 +210,8 @@ public sealed partial class BackgroundChildOwnerAdversarialTests
             recoveredResponse.TrySetResult();
             await CompletedAsync(recoveredSubscriber);
             var final = await ReadJournalPositionsAsync();
-            AssertAdmittedRecoverySettlement(final, delivery, accepted.Run,
-                ["ordinary-probe", "prefix-probe-1", "prefix-probe-2"]);
+            AssertAdmittedRecoveryAuthority(final, delivery, accepted.Run);
+            AssertAdmittedRecoveryLoopBlock(final, ["ordinary-probe", "prefix-probe-1", "prefix-probe-2"]);
             Assert.Equal(new[] { "operator-b", "operator-a", "operator-a" }, _start!.ProbeRequesters);
             Assert.Single(final.Select(row => row.Event).OfType<ToolTaskAdopted>(),
                 evt => evt.TurnContext.TurnId == "ordinary-head");
@@ -258,8 +262,8 @@ public sealed partial class BackgroundChildOwnerAdversarialTests
             item => item.CallId == "start-1");
     }
 
-    private void AssertAdmittedRecoverySettlement((ISessionEvent Event, long SequenceNr)[] rows,
-        ChildRunEvent.DeliveryAdmitted delivery, BackgroundChildRun run, string[] executed)
+    private void AssertAdmittedRecoveryAuthority((ISessionEvent Event, long SequenceNr)[] rows,
+        ChildRunEvent.DeliveryAdmitted delivery, BackgroundChildRun run)
     {
         var events = rows.Select(row => row.Event).ToArray();
         Assert.Single(events.OfType<ChildRunAccepted>());
@@ -271,6 +275,19 @@ public sealed partial class BackgroundChildOwnerAdversarialTests
         Assert.Equal(new[] { delivery.Input.InputId }, adoption.InputIds);
         Assert.True(SessionState.SameCanonicalContext(run.OriginalContext, adoption.TurnContext));
         Assert.Equal(new SenderId("operator-a"), adoption.TurnContext.RequesterSenderId);
+        Assert.Equal(new[] { delivery.Input.InputId }, events.SelectMany(evt => evt switch
+        {
+            ToolBatchStarted batch => batch.ConsumedInputIds,
+            TurnRecorded turn => turn.ConsumedInputIds,
+            InputClosed closed => closed.InputIds,
+            _ => Array.Empty<InputId>()
+        }).Where(id => id == delivery.Input.InputId));
+        Assert.Equal(1, _child.CallCount);
+    }
+
+    private void AssertAdmittedRecoveryLoopBlock((ISessionEvent Event, long SequenceNr)[] rows, string[] executed)
+    {
+        var events = rows.Select(row => row.Event).ToArray();
         Assert.Equal(executed, _start!.ProbeCallIds);
         var refused = Assert.Single(events.OfType<ToolCallRecorded>(),
             evt => evt.ToolResult.ToolCallId == new ToolCallId("prefix-refused-3"));
@@ -281,17 +298,9 @@ public sealed partial class BackgroundChildOwnerAdversarialTests
         var refusedBatch = Assert.Single(events.OfType<ToolBatchStarted>(),
             evt => evt.AssistantMessage.ToolCalls.Any(call => call.CallId == new ToolCallId("prefix-refused-3")));
         Assert.Contains("prefix-refused-3", refusedBatch.LoopAdmission!.RefusedCallIds);
-        Assert.Equal(new[] { delivery.Input.InputId }, events.SelectMany(evt => evt switch
-        {
-            ToolBatchStarted batch => batch.ConsumedInputIds,
-            TurnRecorded turn => turn.ConsumedInputIds,
-            InputClosed closed => closed.InputIds,
-            _ => Array.Empty<InputId>()
-        }).Where(id => id == delivery.Input.InputId));
         var settlement = Assert.Single(events.OfType<TurnRecorded>(),
             evt => evt.AssistantReply.Content == ToolCycleMessages.Final);
         Assert.Equal(ToolCycleMessages.Final, settlement.AssistantReply.Content);
         Assert.Empty(events.OfType<InputClosed>());
-        Assert.Equal(1, _child.CallCount);
     }
 }
