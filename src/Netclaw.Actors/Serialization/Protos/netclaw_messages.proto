@@ -168,6 +168,7 @@ message ToolBatchStartedProto {
   int64 started_at_ms = 4;
   repeated string consumed_input_ids = 5;
   ToolLoopAdmissionProto loop_admission = 7;
+  reserved 8;
   bool metadata_only = 9;
   ToolApprovalRequestedProto.TurnContextRecordProto legacy_task_context = 10;
 }
@@ -302,6 +303,7 @@ message ActiveJobInfoProto {
   string output_log_path = 8;
   int32 lineage_version = 9;
   BackgroundJobOriginProto origin = 10;
+  reserved 11, 12;
 }
 
 message SessionSnapshotProto {
@@ -336,6 +338,7 @@ message SessionSnapshotProto {
   reserved 9;
   repeated InputAdmittedProto pending_inputs = 10;
   repeated string recent_source_message_keys = 11;
+  reserved 12;
   ToolLoopAdmissionProto loop_admission = 13;
   repeated ToolLoopObservationProto loop_observations = 14;
   bool loop_receipt_failure = 15;
@@ -444,6 +447,7 @@ message BackgroundChildRunProto {
   repeated string origin_input_ids = 11;
   WorkingContextProto initial_working_context = 12;
   GitWorkingContextInspectionProto initial_git = 13;
+  reserved 14, 15;
   bool start_batch_settled = 16;
   int64 accepted_at_ms = 17;
   optional int64 started_at_ms = 18;
