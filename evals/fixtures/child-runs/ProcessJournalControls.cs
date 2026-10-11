@@ -50,8 +50,7 @@ internal static class ProcessJournalControls
                 AgentName = new AgentName("worker"), SourceOperation = "spawn_agent", ArgumentsDigest = new string('a', 64),
                 StartKey = new ChildRunStartKey.Tool(new ToolCallId("start")) { SessionId = owner, TurnId = new TurnId(authority.TurnId) },
                 OriginalContext = authority, OriginInputIds = [input.InputId], InitialWorkingSnapshot = new WorkingContextSnapshot
-                    { WorkingContext = WorkingContext.Empty, Git = new GitWorkingContextInspection.Skipped() },
-                ParentCheckpoint = new ToolLoopCheckpoint { TaskId = "same-task" }
+                    { WorkingContext = WorkingContext.Empty, Git = new GitWorkingContextInspection.Skipped() }
             };
             var terminal = new ChildRunTerminal(new SubAgentResult
             {
