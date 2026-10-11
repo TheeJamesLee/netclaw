@@ -1,990 +1,109 @@
-# Netclaw Eval Suite
+# Netclaw Compliance Scorer
 
-Behavioral eval suite that tests identity, skill loading, memory, tool use,
-grounding, and autonomy against an ephemeral `netclawd` Docker container.
-Completely isolated from the operator's real `~/.netclaw` state.
+`evals/run.py` is a small, on-demand behavioral scorer. It asks one question:
+do agents follow mechanical direction?
 
-## Quick Start
+It measures coarse facts only:
+
+- skill load calls;
+- accepted child runs;
+- selected tool calls;
+- missing-profile refusal without profile creation.
+
+It does not check exact final prose or exact orchestration.
+
+## Run
+
+Set the provider and model for one run:
 
 ```bash
-# Run the full suite against your preferred LLM endpoint.
 NETCLAW_EVAL_PROVIDER_TYPE=ollama \
 NETCLAW_EVAL_PROVIDER_ENDPOINT=http://my-gpu-server.tailnet.ts.net:11434 \
 NETCLAW_EVAL_MODEL_ID=qwen3:30b \
-  ./evals/run-evals.sh
+  python3 evals/run.py
 ```
 
-Set `NETCLAW_EVAL_PROVIDER_API_KEY` when the selected provider requires an API
-key. The harness passes it only to the ephemeral provider configuration and
-does not write it into run metadata.
-
-If the value uses Netclaw's `ENC:` form, set
-`NETCLAW_EVAL_DATA_PROTECTION_KEYS` to its key-ring directory. The harness
-copies those keys only into the throwaway eval home and excludes them from
-archived results.
-
-If any of `NETCLAW_EVAL_PROVIDER_TYPE`, `NETCLAW_EVAL_PROVIDER_ENDPOINT`, or
-`NETCLAW_EVAL_MODEL_ID` is unset, the script prompts for the missing values
-on stdin (requires a terminal). In non-interactive contexts (CI, piped
-scripts) the script fails loudly — it never silently falls back to a
-default provider.
-
-## How It Works
-
-1. `scripts/docker/build-image.sh dev` (or a published release image) builds
-   the `netclawd` Docker image.
-2. On every invocation, `run-evals.sh` spins up an ephemeral container
-   from that image with `docker run --rm --network host`, a throwaway
-   `$EVAL_HOME` temp directory, and `NETCLAW_*` env vars that route it at
-   your LLM endpoint.
-3. The harness copies repository identity templates and the deployment mission fixture into `$EVAL_HOME/identity/`.
-   `NETCLAW_EVAL_ASSET_ROOT` selects the checkout that supplies these templates, skill assets, and the canonical worker profile.
-   The mission fixture retains its guidance and gains the short parent coordination route.
-   The worker profile populates only the agent directory in this fresh eval-owned home.
-   The harness does not copy the operator's identity files.
-4. Daemon logs land in `$EVAL_HOME/logs/daemon-YYYY-MM-DD.log` via a
-   writable bind-mount of `/root/.netclaw/logs`. Assertion helpers tail
-   this file with per-prompt offsets, exactly like the pre-container
-   version did.
-5. The CLI is pointed at the eval daemon via
-   `NETCLAW_DAEMON_ENDPOINT=http://127.0.0.1:$EVAL_PORT` and its own path
-   resolution is sandboxed via `NETCLAW_HOME=$EVAL_HOME`. The host's
-   `~/.netclaw/` is never touched by the CLI during the run.
-6. On exit (success, failure, or SIGINT) the container is stopped and
-   `$EVAL_HOME` is deleted. A throwaway root-in-container cleanup step
-   handles files the daemon wrote as UID 0.
-
-### Fresh Containers For Independent Trials
-
-The harness creates one container per invocation. Cases and repeat trials within that invocation share its daemon and data home.
-Use one invocation per independent acceptance trial. Set one exact case and `NETCLAW_EVAL_RUNS=1` for each invocation.
-Multiple conversation turns within that trial use the same container and session.
-
-For five independent trials, run this command five times:
+For a model matrix, run the command once per model:
 
 ```bash
-NETCLAW_EVAL_CASE=tool_cycle_correction \
-NETCLAW_EVAL_RUNS=1 NETCLAW_EVAL_THRESHOLD=1 \
-NETCLAW_EVAL_TIMEOUT=180 \
-  ./evals/run-evals.sh
+for model in qwen3:8b qwen3:30b; do
+  NETCLAW_EVAL_MODEL_ID="$model" python3 evals/run.py
+done
 ```
 
-Set the provider variables before each command. Retain every result, including failures and trials that exceed the deadline.
-Record distinct container IDs, data homes, run IDs, and session IDs. Retain each archive before the next invocation.
-Aggregate the five strict verdicts after all five invocations. Five repeat trials inside one invocation do not establish this isolation.
-An immutable image and CLI binary can be reused with `NETCLAW_EVAL_NO_BUILD=1`, `NETCLAW_IMAGE`, and `NETCLAW_BIN`.
+Useful options:
 
-The harness preloads `evals/fixtures/config/netclaw.json` into the ephemeral
-home before startup. It auto-approves tools and grants read/write access for the
-Personal audience because headless sessions cannot answer approval prompts or
-edit an interactive trust policy. A companion `tool-approvals.json` trusts Git
-for shell-based coding cases. Tool exposure and command-deny rules still apply,
-and these policies are never copied into an operator's config.
+- `--list-cases` lists the case names.
+- `--case <name>` runs one case. Use it more than once for a small subset.
+- `--runs <n>` overrides `NETCLAW_EVAL_RUNS`.
+- `--threshold <n>` overrides `NETCLAW_EVAL_THRESHOLD`.
+- `--timeout <seconds>` overrides `NETCLAW_EVAL_TIMEOUT`.
+- `--no-build` reuses `NETCLAW_IMAGE` and `NETCLAW_BIN`.
 
-`--network host` is the default because operators often host their LLM on
-a Tailscale node — MagicDNS hostnames like `my-gpu-server.tailnet.ts.net` only
-resolve when the container shares the host's DNS resolver. macOS/Windows
-operators need a different endpoint resolution strategy (Docker Desktop
-reduces `--network host` to bridge mode).
+## Environment
 
-## What It Tests
+Required:
 
-The suite runs prompts via `netclaw chat -p` against the eval container and
-verifies both **stdout output** (tool calls, text content) and **daemon
-log patterns** (skill loading, memory recall, checkpoint formation).
+| Variable | Meaning |
+| --- | --- |
+| `NETCLAW_EVAL_PROVIDER_TYPE` | Provider type, such as `ollama` or `openai-compatible`. |
+| `NETCLAW_EVAL_PROVIDER_ENDPOINT` | Provider URL that the container can reach. |
+| `NETCLAW_EVAL_MODEL_ID` | Main model ID for the trial. |
 
-| Category | Cases | What It Validates |
-|----------|-------|-------------------|
-| Identity & Self-Awareness | 5 | Bot knows its name, version, repo, session ID, and routes all identity-file concerns without a skill dependency |
-| Skill Discovery and Activation | 21 | Models load relevant file, feed, and MCP prompt skills while they skip unrelated skills |
-| Memory Pipeline | 4 | Memory recall is active, identity-vs-memory routing is correct, explicit saves use memory tools, and automatic checkpointing still fires |
-| Tool Discovery & Use | 16 | Progressive discovery, structured workspace selection, web search, and timestamped webhook configuration |
-| Grounding & Alignment | 4 | Uses tools to verify facts, admits uncertainty, and resolves announced attachment paths from the authoritative session root |
-| Autonomy & Execution | 2 | Executes tasks rather than describing them |
-| Deployment Mission | 1 | Applies the disk mission playbook, loads its required skill, and returns reviewed sales email |
-| Subagents | 3 | Delegates through `spawn_agent`, completes ambiguous work, preserves specialized guidance, and declares a different named project before shell inspection |
-| Coding Context | 1 | Repeatedly switches between isolated linked worktrees, alternates branch and one-of-four target files by run, and verifies Git grounding, wrong-file/worktree safety, and path-free child handoff |
-| Session Storage | 4 | Verifies managed temporary APIs, parent-child log handoff, and managed worktree creation |
-| Complex Task Execution | 6 | Multi-step tool chains complete successfully, incl. bounded tool output — given only the goal (no handling hints), the agent retrieves a deep line from oversized shell output and from a large file, which is only possible by coping with the bound the way AGENTS.md/skills/steer text direct; and in a session with no shell call, the agent reads the middle of an oversized skill through `tool_output_read` |
-| Multi-Turn Conversation | 7 | Session resume and speaker attribution recall |
-| Built-in Tools Before CLI | 10 | The agent uses a built-in tool, not a `netclaw` shell command, when a tool exists: three regression cases, five guards, and two controls that need the CLI |
+Optional:
 
-Each case defines multiple natural phrasings of the same intent. Each
-run picks a random variant, testing whether behavior is robust across
-phrasing — not just one magic prompt.
+| Variable | Default | Meaning |
+| --- | --- | --- |
+| `NETCLAW_EVAL_PROVIDER_API_KEY` | unset | Provider API key. The archive does not write this value. |
+| `NETCLAW_EVAL_FALLBACK_MODEL_ID` | main model | Fallback model ID. |
+| `NETCLAW_EVAL_COMPACTION_MODEL_ID` | main model | Compaction model ID. |
+| `NETCLAW_EVAL_RUNS` | `5` | Runs per case. |
+| `NETCLAW_EVAL_THRESHOLD` | `0.80` | Per-case pass threshold. |
+| `NETCLAW_EVAL_TIMEOUT` | `120` | Prompt timeout in seconds. |
+| `NETCLAW_EVAL_CASE` | all cases | Comma-separated case names. |
+| `NETCLAW_IMAGE` | `ghcr.io/netclaw-dev/netclaw:dev` | Daemon image. |
+| `NETCLAW_BIN` | `publish/cli/netclaw` | Host CLI path. |
+| `NETCLAW_EVAL_NO_BUILD` | `0` | Set to `1` to skip the local build. |
+| `NETCLAW_EVAL_PORT` | `5299` | Host port for the eval daemon. |
+| `NETCLAW_EVAL_ASSET_ROOT` | current checkout | Checkout that supplies fixtures. |
 
-### Assertion Types
+## Cases
 
-- **stdout assertions** — check `netclaw chat -p` output for tool calls
-  (`[tool:call]`), text content, or absence of hallucinated content.
-- **daemon log assertions** — check the daemon's file log (tailed from
-  `$EVAL_HOME/logs/daemon-$(date +%F).log`) for structured patterns like
-  `turn_skill_auto_load`, `turn_memory_recall`, and
-  `turn_memory_checkpoint_enqueued`.
+The case list is a Python tuple in `evals/run.py`. Each case has:
 
-### Subagent Author Guide Case
+- a name;
+- one prompt template;
+- one coarse assertion.
 
-An explicit `NETCLAW_EVAL_CASE=skill_activation_subagent_authoring` selection uses one fixed structured prompt.
-The broad suite retains its three general variants and legacy assertion.
-The selected case uses the existing typed `turn` observer and actual provider call/result pairs.
-The oracle requires the full current guide through logical tools and a completed final answer with the current background contract.
-The task permits logical reads only. It forbids child starts, file changes, and shell commands.
+Current cases:
 
-Replace the provider placeholders with values that your operator authorizes:
+| Case | Assertion |
+| --- | --- |
+| `subagent-invocation` | A complex task records at least one accepted child run. |
+| `skill-loading` | A mission email task calls `skill_load` for `business-email-review`. |
+| `tool-selection` | A shell task calls `shell_execute`. |
+| `trivial-negative` | A trivial arithmetic task records no accepted child run. |
+| `unavailable-profile-negative` | A missing profile request records no accepted child and no profile file change. |
+
+## Isolation
+
+The runner uses the same isolation model as the old harness:
+
+- It creates a temporary `NETCLAW_HOME`.
+- It copies only eval identity, skills, agents, MCP, and config fixtures.
+- It starts `netclawd` in Docker with `--network host`.
+- It points the host CLI at that daemon with `NETCLAW_DAEMON_ENDPOINT`.
+- It archives stdout, stderr, logs, and `results.json` under `evals/runs/<run-id>/`.
+- It removes the temporary home on exit unless `--keep-home` is set.
+
+Archives can contain prompts, tool calls, and model output. Do not publish raw
+archives without review.
+
+## Verification
+
+The scorer is not a CI gate and does not need a model during normal PR checks.
+For syntax verification, run:
 
 ```bash
-NETCLAW_EVAL_PROVIDER_TYPE='<authorized-provider-type>' \
-NETCLAW_EVAL_PROVIDER_ENDPOINT='<authorized-provider-endpoint>' \
-NETCLAW_EVAL_MODEL_ID='<authorized-model-id>' \
-NETCLAW_EVAL_CASE=skill_activation_subagent_authoring \
-NETCLAW_EVAL_RUNS=1 NETCLAW_EVAL_THRESHOLD=1 \
-  ./evals/run-evals.sh
+python3 -m py_compile evals/run.py
 ```
-
-The default external observation deadline is 60 seconds.
-This case checks guide use and the contract explanation.
-It does not prove actual cancellation, owner restart, profile installation, or long-task completion.
-
-### Coordination Discovery Case
-
-`skill_coordination_discovery` asks for an implementation-then-review process without prescribed tool names.
-The explicit case uses the existing observer `turn` mode and actual provider captures.
-It stops at the first completed parent turn and requires no child.
-Actual DTO failure codes distinguish exact unexecuted metadata feedback from an executed foreign skill.
-The default suite retains its existing CLI evidence and strict legacy oracle.
-The prompt permits an explanation but forbids child starts, file edits, and command execution.
-The case requires a successful logical `agent-coordination` load followed by `references/implement-review.md`.
-It rejects other workflow resources and physical file or shell substitutes.
-The selected oracle matches actual DTO identities and typed results with ordered provider call/result occurrences.
-It checks the complete canonical skill body and workflow resource content.
-An explicit discovery-tool allowlist rejects edits and other action tools.
-Final response claims and skill activation alone cannot satisfy the oracle.
-
-Select this case after you configure an authorized eval provider:
-
-```bash
-NETCLAW_EVAL_CATEGORY='Skill Discovery' \
-NETCLAW_EVAL_CASE=skill_coordination_discovery NETCLAW_EVAL_RUNS=1 NETCLAW_EVAL_TIMEOUT=120 \
-  ./evals/run-evals.sh
-```
-
-The 120-second limit applies only to this explicit observation recipe. It changes no runtime or global default.
-Retained upstream final responses took 61.493 and 64.565 seconds after the old CLI start.
-The original 60-second deadline failures and the third strict failure remain unchanged.
-
-The fixture seed affects only the fresh eval-owned home.
-It preserves the existing mission fixture and copies the canonical release worker asset.
-It does not change operator profiles or playbooks.
-Combined-stack integration must recheck the route extraction after runtime guidance changes.
-
-This case proves discovery and progressive resource access.
-It does not prove workflow execution, child result quality, or artifact delivery.
-No real-model inference pass is recorded for the current preparation.
-The synthetic instrumentation checks passed: 10 coordination controls and three native profile-oracle controls.
-
-```bash
-python3 -m unittest discover -s evals -p test_coordination_evals.py -v
-python3 -m unittest discover -s evals -p test_init_agent_profiles.py -v
-```
-
-### Coordination Artifact Cases
-
-These targeted cases use the existing persistent observer and its `collect` mode.
-The observer collects each accepted child and its attributed terminal consumption.
-The case requires one analyst child and one distinct canonical `task-worker` child.
-The parent reviews the complete findings before the plan assignment.
-The parent reviews the complete plan before the normal attachment action.
-The artifact oracle checks source evidence, traceability, actual reads, and delivery receipts.
-It does not infer comprehension from a file read or a successful skill load.
-
-Select one case in each fresh container, home, and session:
-
-```bash
-NETCLAW_EVAL_RUNS=1 NETCLAW_EVAL_THRESHOLD=1 NETCLAW_EVAL_CASE=coordination_analyze_plan ./evals/run-evals.sh
-NETCLAW_EVAL_RUNS=1 NETCLAW_EVAL_THRESHOLD=1 NETCLAW_EVAL_CASE=coordination_attachment_blocked ./evals/run-evals.sh
-```
-
-Both cases stay outside the default suite.
-Acceptance requires five independent trials for each case, with a 100 percent pass threshold.
-No actual model trial is recorded for this case adapter.
-The blocked case derives its eval-owned config before daemon startup.
-It permits file reads and denies attachments through `Personal.AttachFiles.Mode=None`.
-Normal cases retain their original config.
-The case archives the neutral source, actual artifacts, observer evidence, and oracle report before teardown.
-The archive includes `child-runs/coordination-case/runtime-files/inventory.json`.
-The inventory maps each canonical runtime path to its actual bytes, byte length, and SHA-256 hash.
-It retains only the setup-owned source files, findings, plan, and an attributed attachment target.
-A copied attachment retains its original File DTO path and exact tool receipt.
-The hook records absent files and partial workflows without acceptance credit.
-It also retains altered source and artifact bytes for later review.
-The hook rejects foreign paths, owners, links, and unpaired File DTOs.
-An archive error fails the harness after it removes the owned container, relay processes, home, and temporary files.
-The archive never copies the general session workspace or private files.
-The live artifact oracle remains authoritative. Archive capture alone proves no workflow criterion.
-It never gives the model the trusted truth file or the complete example artifacts.
-Each child must use `file_write` for its complete artifact in this narrow case.
-The adapter binds exact write receipts and bytes to the verified child contexts.
-A workflow that uses only `file_edit` does not satisfy this bounded proof.
-Discovery text proves profile availability. Existing native profile controls prove the canonical Main role.
-A settled but incomplete workflow fails the artifact oracle. The harness does not retry or steer the model.
-
-```bash
-python3 -m unittest discover -s evals -p test_coordination_workflow_evals.py -v
-python3 -m unittest discover -s evals -p test_coordination_artifact_evals.py -v
-```
-
-### Coordination Negative Controls
-
-These targeted cases use ordinary parent turns and the existing provider relay.
-They require an OpenAI-compatible provider and one trial per fresh container, home, and session.
-They do not require the child observer or an accepted child.
-
-```bash
-NETCLAW_EVAL_RUNS=1 NETCLAW_EVAL_THRESHOLD=1 NETCLAW_EVAL_CASE=coordination_trivial_task ./evals/run-evals.sh
-NETCLAW_EVAL_RUNS=1 NETCLAW_EVAL_THRESHOLD=1 NETCLAW_EVAL_CASE=coordination_unavailable_profile ./evals/run-evals.sh
-```
-
-The trivial case asks for one exact typo correction without a prescribed workflow.
-The fixture requires `file_edit` or `file_write` for the correction and forbids shell commands.
-Its oracle requires exact file bytes, an actual edit receipt, and zero child attempts.
-The unavailable case requests a unique profile absent from the actual runtime index.
-It forbids a substitute profile and any file change.
-The parent can report the limitation directly or after an actual unknown-profile rejection.
-The oracle checks the index from actual provider requests and pairs tool receipts with the parent log.
-Both cases reject child requests, profile changes, unrelated actions, and claims without actual file evidence.
-The runner archives the setup, relay requests, parent log, and verdict through its normal evidence path.
-Both cases stay outside the default suite. A failed trial remains a failure.
-These deterministic controls do not establish model behavior:
-
-```bash
-python3 -m unittest discover -s evals -p test_coordination_negative_evals.py -v
-```
-
-### Memory Pipeline Semantics
-
-The memory category intentionally separates three behaviors that used to be
-conflated by a single case:
-
-- **Identity preference routing** validates that personal preferences route into
-  `SOUL.md` through identity-file edits when identity guidance says they should
-  shape future sessions.
-- **Explicit memory write** validates that a direct save request results in a
-  `store_memory` tool call.
-- **Automatic checkpoint enqueue** validates that the session enqueues a memory
-  checkpoint for non-identity facts without taking an explicit memory-write tool
-  path.
-
-This means `memory_checkpoint_enqueue` is the case to watch for automatic memory
-formation regressions, while `memory_identity_preference_routing` and
-`memory_explicit_store` cover user-facing routing behavior.
-
-### Built-in Tools Before CLI Cases
-
-These cases cover one production failure. The owner asked about a recurring job.
-The agent searched for "list reminders", and the search did not return
-`list_reminders`. The agent then read the scheduling reference and ran
-`netclaw reminder list` through `shell_execute`. That call needs a shell
-approval; the built-in tool needs none.
-
-Each assertion reads tool calls from the `--json` envelope and does not read
-the response text. Some prompts name a step on purpose: two cases tell the agent to
-read the scheduling reference, and one tells it to search. No prompt names the
-correct tool.
-
-| Case | Kind | Required evidence |
-|------|------|-------------------|
-| `cli_preference_reminder_schedule` | Regression | Turn 1 reads the scheduling reference. Turn 2 is the owner's exact question: `list_reminders` runs and shows the seeded reminder. No turn runs a `netclaw` shell command. |
-| `cli_preference_reminder_after_reference` | Regression | One turn. The agent reads the scheduling reference, `list_reminders` runs, and no `netclaw` shell command runs. |
-| `cli_preference_reminder_search` | Regression | A `search_tools` result for "list reminders" lists `list_reminders`. The tool runs, and no `netclaw` shell command runs. |
-| `cli_guard_reminder_question` | Guard | The owner's exact question in a new session: `list_reminders` runs and shows the seeded reminder; no `netclaw` shell command. |
-| `cli_guard_reminder_cancel` | Guard | `cancel_reminder` runs with the target ID; no `netclaw` shell command. |
-| `cli_guard_reminder_history` | Guard | `get_reminder_history` runs; no `netclaw` shell command. |
-| `cli_guard_webhook_list` | Guard | `list_webhooks` runs; no `netclaw` shell command. |
-| `cli_guard_approvals_read` | Guard | A tool call reads `tool-approvals.json`; no `netclaw` shell command. |
-| `cli_control_reminder_delete` | Control | No built-in tool deletes a reminder. `netclaw reminder delete <id>` runs through the shell. |
-| `cli_control_daemon_status` | Control | No built-in tool reports daemon health. `netclaw status` or `netclaw doctor` runs through the shell. |
-
-A regression case fails on the code before the fix. A guard case passes before
-the fix and keeps the correct behavior. A control case needs the CLI, so
-guidance that only tells the agent to avoid the `netclaw` CLI fails it.
-
-A case setup writes each reminder definition file after the daemon starts, so
-other categories have no reminders. The reminder tools read the files for each
-call. The daemon gives a schedule entry only to a file that exists at startup,
-so a seeded reminder cannot fire during a run.
-
-The `eval_workspace` MCP fixture adds 18 tools for every category. Their names
-share common words with the built-in tools, as a production catalog does. The
-search case needs them: without those tools, an unranked search still returns
-`list_reminders`.
-
-A shell command counts as a `netclaw` CLI call when `netclaw` is in the command
-position, with or without a path or an assignment prefix. A path such as
-`~/.netclaw/logs` does not count. A call behind `timeout 30` or `bash -c` is a
-known limit of the detector. `test_cli_detector_evals.py` holds the examples.
-
-Use a timeout of 240 seconds for this category. A case can need five model calls.
-
-```bash
-NETCLAW_EVAL_CATEGORY='Built-in Tools' NETCLAW_EVAL_TIMEOUT=240 ./evals/run-evals.sh
-```
-
-### Tool Cycle Cases
-
-The cycle cases use the existing harness and provider relay. They require an
-OpenAI-compatible endpoint with a `/v1` API base. The default suite excludes them.
-Select one `tool_cycle_*` case explicitly for an independent trial.
-The cases require Docker, Bash, Python 3, jq, and sqlite3.
-
-```bash
-NETCLAW_EVAL_PROVIDER_TYPE=openai-compatible \
-NETCLAW_EVAL_PROVIDER_ENDPOINT=http://your-model-server:8000/v1 \
-NETCLAW_EVAL_MODEL_ID=your-model \
-NETCLAW_EVAL_CASE=tool_cycle_correction \
-NETCLAW_EVAL_RUNS=1 NETCLAW_EVAL_THRESHOLD=1 \
-NETCLAW_EVAL_TIMEOUT=180 \
-  ./evals/run-evals.sh
-```
-
-| Case | Required evidence |
-|------|-------------------|
-| `tool_cycle_correction` | The third request receives a runtime correction. The model uses `file_read` to complete an alternative. |
-| `tool_cycle_terminal` | The runtime stops the repeated blocked request. It reports partial work without another model request. Exactly two executions complete. |
-| `tool_cycle_compaction` | Normal compaction completes between executions one and two. The third request receives a correction. The model completes an alternative. |
-| `tool_cycle_changed_result` | The same command returns a different result each time. All three executions complete. |
-| `tool_cycle_metadata_repair` | Two requests lack required metadata. The corrected request executes once without a cycle correction. |
-| `tool_cycle_nonadjacent_correction` | Distinct diagnostics separate two equal primary results. Candidate three receives correction. The real model completes recovery through `file_read`. |
-| `tool_cycle_nonadjacent_terminal` | A further diagnostic follows correction. The next primary candidate receives runtime Stop. No further provider request or effect occurs. |
-
-The relay scripts only the initial tool requests. Each request has a fresh call ID.
-The real daemon executes tools and emits the intervention. The target model controls
-the alternative tool use in cases that permit recovery. The terminal cases require
-a runtime report and zero model requests after the stop candidate. The fixture never
-supplies a successful final answer.
-
-Each trial uses synthetic files in the isolated workspace. A separate counter
-checks actual side effects. Strict assertions require paired runtime results,
-the expected tool exposure, a real alternative result, and an accurate JSON report
-for recovery cases. The terminal cases require the runtime partial report.
-Every trial must pass. The category fixes the pass threshold at 100 percent.
-
-Recovery permits only `file_read` calls.
-`completed_attempts` counts actual primary appends. Denied requests and diagnostics do not count.
-`last_result` names the last executed primary output, without guard feedback or diagnostic output.
-The entire visible reply must contain one final JSON object, without Markdown or text beside tool calls.
-The response check rejects JSON fences and extra prose. It preserves the separate runtime and side-effect scores.
-Earlier trial results retain their original prompt revision. These clarifications do not alter those verdicts.
-
-The nonadjacent cases request `A, B, A, C, A` after the normal shell-tool load.
-`A` appends one primary attempt and returns the same result.
-Distinct diagnostics `B` and `C` append their own labels to a separate counter and return distinct results.
-Candidate three of `A` must receive a paired runtime correction without an effect.
-The terminal case then requests `D, A`. Diagnostic `D` executes before the runtime refuses the final `A` candidate.
-These sequences avoid adjacent cycles of periods one through three.
-Exact CLI call arguments, ordered diagnostic receipts, and both counters establish the interleaved sequence.
-Both terminal oracles reject any later provider request, including a sidecar request.
-This oracle check does not establish a runtime or model pass.
-
-Acceptance requires five independent trials per new case and a 100 percent pass rate.
-Select `NETCLAW_EVAL_CASE=tool_cycle_nonadjacent_correction` or `NETCLAW_EVAL_CASE=tool_cycle_nonadjacent_terminal` with `NETCLAW_EVAL_RUNS=1`.
-Invoke the harness five times per case. Follow the fresh-container procedure above.
-Trial-count overrides remain available for diagnosis. Fewer trials do not complete acceptance.
-
-The compaction case reports synthetic token usage above the normal threshold.
-The real daemon must complete compaction and reduce history before the second
-execution. The isolated config retains one recent tool result and disables title
-requests. Production config and resource limits do not change.
-
-The relay permits at most 16 main requests per trial.
-At most eight of those requests can reach the target model.
-Compaction and memory-distillation requests share a separate limit of eight sidecar requests.
-Both require evidence that identifies the current synthetic trial.
-The common prompt timeout also applies. The relay accepts a plain API
-key through the existing environment variable. It does not accept encrypted keys.
-
-The common archive includes a synthetic relay snapshot and an assertion report.
-These cases cover the parent actor. They do not replace child actor tests,
-private incident replay, or observe-only acceptance evidence.
-
-#### Raw-output review of the first fixed run
-
-The five-trial Qwen run on September 12, 2026, has 8 strict passes from 25 trials.
-These scores use the original prompt and oracle. Later changes do not replace them.
-
-| Case | Original strict passes |
-|------|------------------------|
-| Correction | 2/5 |
-| Terminal stop | 5/5 |
-| Compaction | 0/5 |
-| Changed result | 1/5 |
-| Metadata repair | 0/5 |
-
-Independent review of the raw receipts confirms all 25 initial scripted runtime sequences.
-That result does not prove post-handoff safety. Eight trials cause additional mutations.
-Five other failures recover the correct value safely but violate tool, status, or format requirements.
-Two compaction trials fail to recover and report incorrect data.
-One metadata trial has an ambiguous blocked-operation flag. One metadata trial exceeds the 180-second deadline without a final response.
-
-The original status instruction does not clearly separate recovery-value retrieval from primary-operation success.
-The revised prompt defines this distinction and explicitly requires `file_read`.
-The strict oracle still rejects shell alternatives and extra mutations.
-The report separates the initial runtime contract, post-handoff safety, and model task checks.
-The terminal case has no target-model task score. Its `model_task` group reports `not_applicable`.
-The runtime group checks its partial report and the absence of a final model request.
-An incomplete trace receives an explicit inconclusive result, never a pass.
-The safety group requires both the expected final counter and a `file_read`-only post-handoff trace.
-A final counter alone cannot exclude a later write that resets it.
-
-The review also finds absent compaction flags in the transport and a relay that rejects memory-distillation sidecars.
-Neither finding establishes a detector-state defect. The retained summary's semantic quality remains unverified.
-Different completed actions clear the prior block, and changed results prevent exact recurrence.
-These evals do not justify removal of resource limits.
-
-#### Revised prompt and transport run
-
-The next fixed run uses two trials per case. It records 5/10 strict passes and 10/10 initial runtime-contract passes.
-The post-handoff safety group passes 6/10 trials. A separate compaction smoke trial passes all checks.
-
-| Case | Initial runtime contract | Strict task result |
-|------|--------------------------|--------------------|
-| Correction | 2/2 | 2/2 |
-| Terminal stop | 2/2 | 2/2 |
-| Compaction | 2/2 | 1/2 |
-| Changed result | 2/2 | 0/2 |
-| Metadata repair | 2/2 | 0/2 |
-
-Independent raw review confirms four trials with extra mutations after successful initial controls.
-One compaction trial reaches the cycle stop, then receives a decoded tool call in the text-only response.
-The runtime rejects that call. The turn uses 4 of 60 tool iterations, so the former budget-exhaustion message was inaccurate.
-The diagnostic now describes the text-only violation without a false budget claim.
-Raw upstream responses are absent; provider versus adapter responsibility remains unverified.
-
-The positive controls still lack an explicit setup length in this run's prompt.
-The next diagnostic prompt defines three initial shell requests and starts recovery after their third result.
-It also separates permitted setup effects from the later no-write rule.
-No new user message occurs at handoff, and every strict safety check remains active.
-This follow-up does not replace either earlier fixed run.
-
-Run the assertion tests without a model:
-
-```bash
-python3 -m unittest discover -s evals -p 'test_*evals.py' -v
-bash -n evals/run-evals.sh
-bash -n evals/cycle_evals.sh
-```
-
-## Environment Variables
-
-### Eval target (required)
-
-| Variable | Description |
-|----------|-------------|
-| `NETCLAW_EVAL_PROVIDER_TYPE` | Provider type (`ollama`, `openai`, `openai-compatible`, `openrouter`, `anthropic`) |
-| `NETCLAW_EVAL_PROVIDER_ENDPOINT` | Provider URL the container should call |
-| `NETCLAW_EVAL_MODEL_ID` | Main model id |
-| `NETCLAW_EVAL_PROVIDER_API_KEY` | Optional API key for the eval provider |
-| `NETCLAW_EVAL_DATA_PROTECTION_KEYS` | Optional key ring for an encrypted API key |
-
-If any of these is unset and stdin is a terminal, the script prompts for
-the missing values. In non-interactive contexts it fails loudly.
-
-### Eval target (optional)
-
-| Variable | Default | Description |
-|----------|---------|-------------|
-| `NETCLAW_EVAL_FALLBACK_MODEL_ID` | `NETCLAW_EVAL_MODEL_ID` | Fallback model id |
-| `NETCLAW_EVAL_COMPACTION_MODEL_ID` | `NETCLAW_EVAL_MODEL_ID` | Compaction model id |
-| `NETCLAW_EVAL_CONTEXT_WINDOW` | — | Override `Models:Main:ContextWindow`. Cycle cases use 65536 by default. |
-| `NETCLAW_EVAL_DISABLE_THINKING` | `false` | Disable provider reasoning for a focused tool-use eval. |
-
-### Container + runtime (optional)
-
-| Variable | Default | Description |
-|----------|---------|-------------|
-| `NETCLAW_IMAGE` | `ghcr.io/netclaw-dev/netclaw:latest` | Image ref |
-| `NETCLAW_EVAL_PORT` | `5299` | Host-side port for the eval daemon |
-| `NETCLAW_BIN` | `netclaw` | Path to the netclaw CLI on the host |
-| `NETCLAW_EVAL_ASSET_ROOT` | Current checkout | Checkout that supplies identity, skills, agents, and config fixtures |
-
-### Eval suite knobs (optional)
-
-| Variable | Default | Description |
-|----------|---------|-------------|
-| `NETCLAW_EVAL_RUNS` | `5` | Runs per case |
-| `NETCLAW_EVAL_THRESHOLD` | `0.80` | Pass threshold (0.0-1.0) |
-| `NETCLAW_EVAL_TIMEOUT` | `60` | Per-prompt timeout in seconds |
-
-### Examples
-
-```bash
-# Quick smoke test (1 run, lower threshold)
-NETCLAW_EVAL_PROVIDER_TYPE=ollama \
-NETCLAW_EVAL_PROVIDER_ENDPOINT=http://my-gpu-server:11434 \
-NETCLAW_EVAL_MODEL_ID=qwen3:30b \
-NETCLAW_EVAL_RUNS=1 NETCLAW_EVAL_THRESHOLD=0.50 \
-  ./evals/run-evals.sh
-
-# Run against a locally-built dev image
-NETCLAW_IMAGE=ghcr.io/netclaw-dev/netclaw:dev \
-NETCLAW_EVAL_PROVIDER_TYPE=ollama \
-NETCLAW_EVAL_PROVIDER_ENDPOINT=http://127.0.0.1:11434 \
-NETCLAW_EVAL_MODEL_ID=qwen3:30b \
-  ./evals/run-evals.sh
-
-# Run ten alternating linked-worktree/recent-file coherence trials
-NETCLAW_IMAGE=netclaw-eval:working-context-treatment \
-NETCLAW_EVAL_PROVIDER_TYPE=openai-compatible \
-NETCLAW_EVAL_PROVIDER_ENDPOINT=https://your-provider.example/v1 \
-NETCLAW_EVAL_MODEL_ID=your-model \
-NETCLAW_EVAL_CASE=coding_context_worktree_handoff \
-NETCLAW_EVAL_RUNS=10 NETCLAW_EVAL_TIMEOUT=180 \
-  ./evals/run-evals.sh
-```
-
-For a baseline and treatment comparison, use the same harness commit. Point
-`NETCLAW_EVAL_ASSET_ROOT` at the checkout that produced each image. Also use
-that checkout's CLI. The archived run metadata records the image identity,
-harness commit, asset commit, and dirty state.
-
-## Background launch comparison
-
-`run-background-evals.sh` checks actual job state and process lifetime. It uses an isolated daemon and harmless process fixtures.
-The loopback fixture drives queue setup through the normal model tool protocol. It sends later model turns to the selected provider.
-It does not change the daemon or submit jobs through a test API.
-
-| Case | Required evidence |
-|------|-------------------|
-| `queued_grant_valid` | Five live blockers, one Pending target, a valid grant, a process marker, and successful completion |
-| `queued_grant_revoked` | Verified grant removal, an actual approval denial for the same foreground command, a Pending target before release, then Failed/-1 without a marker |
-| `queued_grant_report` | The real model queries the target in its original session and reports its observed state without a shell retry |
-| `tool_background_job_lifecycle` | The real model starts one job, queries its output on another turn, and cancels that job; its process must exit |
-
-The older grep-based case now uses the name `tool_background_job_api_selection`. It proves tool selection only.
-The new lifecycle case belongs to the dedicated entrypoint because it needs process controls and strict shell grants.
-Headless sessions receive no background completion notification. The harness observes persisted state through inotify and reads actual tool results.
-The revoked case proves that execution did not occur under revoked authority. It does not identify the background actor's internal failure cause.
-
-For a comparison, merge the eval PR first. Keep that harness checkout unchanged for both runs.
-Build the baseline and candidate in separate worktrees. Give each image a distinct tag and retain each CLI binary.
-Use the same model, provider configuration, assets, prompts, run count, and timeout for both runs.
-Do not rebuild a mutable image tag between runs. Record both source revisions with the results.
-
-```bash
-export NETCLAW_EVAL_PROVIDER_TYPE=openai-compatible
-export NETCLAW_EVAL_PROVIDER_ENDPOINT="$EVAL_API_BASE"  # API base must end in /v1.
-export NETCLAW_EVAL_MODEL_ID="$EVAL_MODEL"
-export NETCLAW_EVAL_RUNS=5
-export NETCLAW_EVAL_TIMEOUT=180
-export NETCLAW_EVAL_ASSET_ROOT="$EVAL_HARNESS_CHECKOUT"
-
-NETCLAW_EVAL_NO_BUILD=1 NETCLAW_IMAGE="$BASELINE_IMAGE" NETCLAW_BIN="$BASELINE_CLI" \
-  "$EVAL_HARNESS_CHECKOUT/evals/run-background-evals.sh"
-NETCLAW_EVAL_NO_BUILD=1 NETCLAW_IMAGE="$CANDIDATE_IMAGE" NETCLAW_BIN="$CANDIDATE_CLI" \
-  "$EVAL_HARNESS_CHECKOUT/evals/run-background-evals.sh"
-```
-
-The relay supports the OpenAI Chat Completions protocol. Set `NETCLAW_EVAL_PROVIDER_API_KEY` if the upstream requires a plain API key.
-The relay does not support encrypted keys, OAuth, or other provider protocols. Keep secrets and private endpoints out of commits and public reports.
-Linux, Docker host networking, Python 3, and Linux pidfds are required.
-
-For local harness checks without an external model, use `./evals/run-background-evals.sh --runtime-only`.
-This mode executes only the two queue cases. It does not provide model behavior evidence.
-Set `NETCLAW_EVAL_CASE=tool_background_job_lifecycle` or `NETCLAW_EVAL_CASE=queued_grant_revoked` to execute the two evals separately.
-The queued eval always includes the valid-grant control. A harness error stops the run because its state can invalidate later cases.
-An unsafe baseline returns a failure when the revoked target starts. Do not adjust the oracle to make that baseline pass.
-
-Each run archives `stdout/stdout_background-results.txt` below `evals/runs/<run-id>/`.
-The JSON separates runtime verdicts, model verdicts, and harness errors. It includes queue records, grant snapshots, process evidence, and the CLI hash.
-An upstream endpoint hash permits comparison without disclosure of the private URL.
-The existing archive also records the image ID, harness revision, asset revision, and dirty checkout flags.
-Any runtime failure, model failure, or harness error fails the run. The ordinary suite percentage threshold does not apply.
-Local fixture tests run with `python3 -m unittest discover -s evals -p test_background_evals.py -v` and also run in CI.
-
-## Results Database
-
-Results are accumulated in `$EVAL_HOME/evals/results.db` during execution.
-On exit, the harness archives the database, run metadata, daemon log, and
-per-turn stdout under `evals/runs/<run-id>/` before deleting the throwaway
-home. These archives are gitignored and can be compared locally without
-touching the operator's `~/.netclaw/` state.
-
-Raw archives can contain prompts, session identities, tool calls, and provider
-configuration. Do not publish them. Publish only reviewed PII-free aggregates.
-
-Windows model-pattern cases remain deferred until sanitized representative
-traffic exists. Windows contract tests remain required for path and process
-behavior. Record the deferred cases as evidence work, not as passed evals.
-
-Requires `sqlite3` CLI — if not available, the script still runs but
-skips persistence.
-
-## Adding New Cases
-
-1. Define an assertion function in the "Case Assertion Functions"
-   section:
-
-   ```bash
-   assert_my_new_case() {
-       stdout_contains '\[tool:call\] my_tool' && stdout_contains 'expected text'
-   }
-   ```
-
-2. Add the case to the appropriate category in `run_all()`:
-
-   ```bash
-   run_case my_new_case "description of pass criteria" \
-       "Prompt variant 1" \
-       "Prompt variant 2" \
-       "Prompt variant 3"
-   ```
-
-### Assertion Helpers
-
-| Helper | Description |
-|--------|-------------|
-| `stdout_contains 'pattern'` | Case-insensitive grep of stdout (basic regex) |
-| `stdout_not_contains 'pattern'` | Inverse of above |
-| `daemon_log_contains 'pattern'` | Extended regex grep of daemon log entries added during the prompt |
-
-### When to Add Cases
-
-- New system skill added → add a skill auto-load case
-- New tool added → add a tool discovery/use case
-- Identity grounding rules changed → update identity assertions
-- Production session failure → add a regression case
-
-## Scoring
-
-- **Per-case:** passes / total runs >= threshold → case passes
-- **Per-category:** GREEN (all pass), YELLOW (>= 80%), RED (< 80%)
-- **Overall:** cases passed / total cases
-- **Exit code:** 0 if all cases pass, 1 if any fail, 2 if the eval
-  container died during startup or mid-run
-
-## Prerequisites
-
-- `docker` (the host needs a working Docker daemon)
-- `netclaw` CLI installed on the host (`curl` install script or local build)
-- `~/.netclaw/identity/SOUL.md` — run `netclaw init` once on the host
-- `timeout`, `curl`, `awk` (coreutils, standard on most Linux distros)
-- `sqlite3` (optional — results persistence degrades gracefully without it)
-
-## Limitations (v2)
-
-- **Local LLM required**: the eval container needs to reach an LLM
-  endpoint the operator supplies. CI execution is not yet wired up — it
-  requires a remote LLM endpoint secret and runtime budget. Track as a
-  follow-up.
-- **`--network host` is Linux-only**: the Tailscale MagicDNS use case
-  depends on inheriting the host's DNS resolver. Docker Desktop
-  (macOS/Windows) degrades `--network host` to bridge mode; set
-  `NETCLAW_EVAL_PROVIDER_ENDPOINT` to a reachable IP/hostname instead.
-- **Multi-turn support**: `netclaw chat -p --resume <id>` enables multi-turn
-  scripted conversations against a named session.
-- **No native ACL/authority eval mode yet**: the current scored runner exercises
-  multi-turn attribution behavior, but it does not yet simulate restricted
-  channel posture with distinct authorized vs unauthorized speakers.
-- **Daemon does not fail fast on empty config**: a follow-up task will
-  make `netclawd` refuse to start when identity or provider config is
-  missing. Today, missing config produces a running-but-broken daemon
-  whose LLM calls fail at request time. Not relevant to the eval path
-  itself (the script always supplies valid config) but noted for anyone
-  exploring the Docker image directly.
-
-## Background child acceptance and later results
-
-The child cases use the existing background runner and a persistent `DaemonClient` consumer.
-Read [the child consumer procedure](fixtures/child-runs/README.md) before a trial.
-The product headless CLI exits at its first turn boundary.
-A child result can arrive later, so the affected Subagents cases retain a connection through automatic continuation.
-The adapter labels its evidence source and retains the actual output DTOs.
-It does not fabricate a second result for the original start call.
-
-Select `child_run_held_parent`, `child_run_partial_cancel`, or `child_run_cli_acceptance` with `NETCLAW_EVAL_CASE`.
-
-The observer records the exact child-status cycle correction as non-success, without status or ownership evidence.
-Other malformed status text remains an error. A correction does not authorize child release or prove completion.
-The observer retains the exact `invalid_rationale` rejection before execution as a failed start attempt.
-The model can correct that attempt through the normal tool path.
-The held and cancel cases still require one accepted child before the initial parent turn ends.
-The parent must explicitly load `check_agent_run` before its selected control call.
-The oracle checks the successful load result before that call in actual parent provider history.
-A loaded schema can persist across turns. The oracle does not require a second load in the probe turn.
-The selected status must follow the held payload and name that child's exact owner, log, artifact directory, and state.
-The held case permits that recorded status in the first or second turn.
-The second turn still requires a fresh, attributed live-log read and the visible probe reply before release.
-Recorded status does not prove current provider health or schema retention after restart.
-The collector permits multiple accepted children. Every rejection retains its trusted DTO failure code and exact result.
-To replay the captured status sequence through the helper controls, append its `session-output.jsonl` path:
-
-```bash
-dotnet evals/fixtures/child-runs/bin/Release/net10.0/SessionObserver.dll --protocol-controls /path/to/session-output.jsonl
-```
-Run each trial through `run-background-evals.sh` with `NETCLAW_EVAL_RUNS=1`.
-Set `NETCLAW_CHILD_OBSERVER` to the canonical observer DLL from the final combined source.
-Use five fresh invocations for each critical held-child and cancel case.
-The runner archives actual provider bytes, child paths, commit diagnostics, and artifact evidence.
-The CLI acceptance smoke remains separate from the persistent-result cases.
-
-The cancel case requires an actual `agent-coordination` load in the first parent turn.
-The parent cancels the child in the second turn, after its live-log read.
-The oracle checks cancellation admission and dispatch closure as separate status facts.
-After terminal consumption, the parent must fully read the actual framework report and the confirmed partial artifact.
-The parent must also obtain explicit dispatch closure and the matching cancelled terminal through status.
-The oracle reads the confirmed regular report as the container user `netclaw`.
-The oracle rejects links and foreign paths before the container read.
-The runner archives the exact report bytes in `child-runs/actual-cancelled-results.json`.
-The report check and the parent-read check use that same byte payload.
-The status oracle decodes the canonical JSON string in `terminal` and rejects object input.
-It compares that terminal with the actual consumed result.
-A failed owner read or an eval timeout fails the trial.
-These checks prove local receipts and file access. They do not prove that external effects stopped.
-
-The existing Subagents consumers also require an exact case selector and one fresh invocation.
-Their original project, scope, shell, and artifact assertions remain mandatory.
-The queue-grant and shell lifecycle controls retain their original paths and oracles.
-This source preparation supplies no current model pass or complete background health claim.
-
-The two coordination plan cases permit model-owned replacements after attributed failed attempts.
-Every accepted attempt retains its canonical terminal, durable positions, and actual consumption evidence.
-Each replacement must follow the failed terminal's consumption and retain its assigned scope.
-The workflow still requires exactly one Completed analysis stage and one Completed plan stage.
-A failed attempt supplies no successful artifact-write credit. Unrelated runs and extra Completed stages fail.
-The parent must fully review the findings before every plan attempt and the plan before attachment.
-This case-specific rule does not change other collect consumers or create harness retries.
-
-### Productive parent and child catalog case
-
-`productive_parent_child` requires 65 useful parent feedback rounds and 35 useful child feedback rounds.
-The case stays outside the default suite. It uses the existing `collect` observer and child relay.
-
-```bash
-NETCLAW_EVAL_CASE=productive_parent_child \
-NETCLAW_EVAL_RUNS=1 NETCLAW_EVAL_THRESHOLD=1 \
-NETCLAW_EVAL_TIMEOUT=900 \
-NETCLAW_CHILD_OBSERVER="$PWD/evals/fixtures/child-runs/bin/Release/net10.0/SessionObserver.dll" \
-  ./evals/run-evals.sh
-```
-
-Use the approved provider configuration and frozen image, CLI, and helper.
-Run one fresh invocation for each of the five acceptance trials. Preserve every failed trial.
-The 900-second eval observation deadline permits 100 sequential model feedback rounds.
-It adds no runtime task budget. The existing default harness and operation deadlines remain unchanged.
-
-Each trial creates two neutral catalogs with distinct opaque record paths and values.
-The prompt supplies only each catalog's entry path. Each actual `file_read` result reveals the next path.
-The parent reads 65 records itself. One canonical `task-worker` child reads 35 other records.
-The child writes its exact ordered catalog. The parent reads that complete artifact after attributed terminal delivery.
-The parent then writes the complete combined catalog and reports its actual path and counts.
-The case forbids shell calls, directory scans, source edits, path guesses, and substituted summaries.
-An actor can declare only the exact catalog project root with `set_working_directory`.
-The oracle requires its canonical success result. Each parent declaration also needs matching DTO and provider receipts.
-
-The oracle compares source and output bytes, ordered parent DTO pairs, and attributed child provider pairs.
-It requires each next record call after the prior record result. Parallel calls cannot satisfy this gate.
-It retains the accepted run, terminal consumption, journal positions, complete outputs, and assertion diagnostics.
-A full direct text read and a complete `file_write` are required for this narrow case.
-Deterministic controls prove oracle sensitivity. They do not prove live model behavior or general catalog comprehension.
-
-Parent DTO events prove one read occurrence per parent record in the observed session.
-Child captures prove at least 35 distinct useful record feedback rounds and reject repeats within one history.
-Compaction can hide identical child call reuse across captures. This oracle cannot prove one global execution per child record or output write.
-Repeated cumulative captures and completed call-ID reuse across distinct records remain valid.
-
-The assertion archives existing actual outputs before it checks their values. It records missing outputs explicitly and rejects linked paths.
-An observer failure before the assertion can still prevent artifact capture. Retain that instrumentation limit with the failed trial.
-
-### Isolated implementation and independent review
-
-`coordination_implement_review` stays outside the default suite. It uses the existing `collect` observer and child relay.
-The eval home includes the default `code-analyst` profile for this case and `coordination_conflicting_evidence` only.
-The fixture retains the existing default profile fields and instructions.
-The other cases keep their prior profile catalog, including the canonical `task-worker`.
-The profile controls execute the seed path and load the reviewer through the runtime loader and parent index.
-
-```bash
-NETCLAW_EVAL_CASE=coordination_implement_review \
-NETCLAW_EVAL_RUNS=1 NETCLAW_EVAL_THRESHOLD=1 \
-NETCLAW_EVAL_TIMEOUT=300 \
-NETCLAW_CHILD_OBSERVER="$PWD/evals/fixtures/child-runs/bin/Release/net10.0/SessionObserver.dll" \
-  ./evals/run-evals.sh
-```
-
-Use the approved provider configuration and frozen image, CLI, and helper.
-Run five independent fresh invocations for acceptance. Preserve every failed trial.
-The 300-second observation deadline adds no runtime task budget or retry policy.
-
-The default approval fixture adds `git add` and `git commit` only for this case and `coordination_two_writers`.
-Both grants use the container workspace directory scope. Other cases retain the exact prior fixture bytes.
-An explicit `NETCLAW_EVAL_APPROVALS_FILE` stays unchanged and receives no added grants.
-The matcher checks the explicit command target first. It uses the process directory when the command has no target.
-The scoped grants do not authorize an outside target or `git push`.
-
-```bash
-python3 -m unittest discover -s evals -p test_eval_approval_seed.py -v
-```
-
-The fixture reuses the neutral catalog source and creates a real detached Git worktree.
-The original checkout has staged and unstaged operator edits plus an untracked marker.
-Git creates both checkouts under the container's daemon user. The oracle applies no global Git trust override.
-The fixture retains original file bytes, the raw index, branch, HEAD, and Git setup output.
-The unchanged acceptance script fails on the original publication defect before any model call.
-
-One `task-worker` repairs and commits only `source/catalog.py` in the isolated worktree.
-The worker runs the disclosed acceptance command and writes a complete revision-bound report.
-The parent reads that report and the complete source. It checks the actual candidate revision and diff.
-Then a distinct `code-analyst` child reads the same candidate and independently repeats the acceptance command.
-The reviewer writes its findings to a separate report. It cannot edit candidate source.
-The parent reads the complete review and checks the same source, revision, and diff again.
-Its final JSON names the actual candidate, unresolved findings, both reports, and the absent integration.
-
-The oracle requires actual command results, successful report writes, profile discovery, attributed terminals, and complete parent reads.
-It repeats the acceptance check inside the existing eval container under the existing eval deadline.
-It checks operator and checker preservation after that command and before success.
-Only the exact unexecuted `invalid_rationale` start rejection can precede a later accepted start.
-The model owns any correction. The harness retains each attempt and requires its actual DTO and provider pair.
-For this case, the parent can also correct that exact rejection for `skill_load` and `set_working_directory`.
-The oracle checks the actual DTO occurrence and provider pair. A rejected declaration supplies no project context or success credit.
-Each executed declaration still needs an exact named root and successful canonical path result.
-The command list stays exact. A rejected load cannot replace a required successful read, check, or report.
-A rejected model call can use the same argument shape as a framework terminal input.
-The observer supplies its typed call metadata to the relay control and the final oracle.
-The oracle excludes only an exact attributed `invalid_rationale` rejection. It gives that attempt no terminal or delivery credit.
-Other observed model calls cannot supply a framework terminal. All accepted children still require their actual terminal evidence.
-The oracle rejects all other failed starts and visible source edits after the candidate commit.
-Compaction can hide identical restored actions across captures. The case does not prove absence of every transient edit.
-The assertion preserves actual report bytes before later checks. An earlier observer failure can still prevent that archive.
-
-This case proves one isolated writer and a later read-only review. It does not prove two concurrent writers or integration.
-Actual reads prove access. Deterministic controls do not prove model comprehension, general review quality, CI, release, or deployment.
-Project declarations remain actor-scoped. The parent may declare only the named operator or isolated worker root.
-Both child roles may declare only the worker root. Each declaration needs its exact successful path result.
-The fixture prompt states these declaration roots. It also forbids joins between separate listed shell commands.
-The listed worker commit command retains its own `&&` operator.
-Parent declaration DTOs and provider call/result identities must match. Other roots, failures, and unpaired declarations fail.
-The declaration changes no file, index, revision, writer, or shell-command requirement.
-
-Stale, incomplete, and conflicting evidence gates remain separate obligations.
-
-
-## Stale and incomplete child report review
-
-`coordination_stale_incomplete` stays outside the default suite. It uses the unchanged `collect` observer.
-
-```bash
-NETCLAW_EVAL_CASE=coordination_stale_incomplete \
-NETCLAW_EVAL_RUNS=1 NETCLAW_EVAL_THRESHOLD=1 NETCLAW_EVAL_TIMEOUT=180 \
-NETCLAW_CHILD_OBSERVER_DLL=evals/fixtures/child-runs/bin/Release/net10.0/SessionObserver.dll \
-./evals/run-evals.sh
-```
-
-Use five fresh container, home, session, nonce, and relay identities for acceptance.
-The 180-second observation deadline changes no runtime task budget.
-
-One actual task-worker copies two supplied reports unchanged into distinct output files.
-Its `Completed` terminal proves the copy task only. Each report separately declares itself complete.
-One report cites an old source identity. The other retains a required action placeholder.
-The parent must consume the attributed terminal and fully read the current source, findings, and both copied reports.
-Its final JSON must reject both claims and identify the exact observed revision and unresolved field.
-The user task forbids repair, commands, another child, and polling. The harness supplies no model recovery decision.
-Paired deterministic controls require acceptance of current complete reports.
-
-The oracle requires actual acceptance, terminal, context, full-read, and full-write call/result evidence.
-Parent DTO call IDs must match their provider pairs. Parent and child project declarations permit only the exact case workspace.
-Each declaration needs its canonical successful path result. Wrong roots, failed results, and unpaired declarations fail.
-It preserves actual output bytes when verification starts, including bytes from a failed verdict.
-An observer failure before verification remains a separate archive limit.
-Cumulative provider history can hide identical completed occurrences after compaction.
-Full reads prove access. This narrow case does not prove general comprehension, repair, delivery, or live model success.
-
-```bash
-python3 -m unittest discover -s evals -p test_coordination_stale_incomplete_evals.py -v
-```
-
-### Conflicting analyst evidence
-
-`coordination_conflicting_evidence` stays outside the default suite. It uses the unchanged `collect` observer.
-
-```bash
-NETCLAW_EVAL_CASE=coordination_conflicting_evidence \
-NETCLAW_EVAL_RUNS=1 NETCLAW_EVAL_TIMEOUT=180 NETCLAW_EVAL_THRESHOLD=1 \
-./evals/run-evals.sh
-```
-
-Run five fresh independent invocations for model acceptance. Give each invocation a fresh container, home, session, relay, and nonce.
-The 180-second observation deadline does not impose a runtime task budget.
-
-Two actual `code-analyst` children inspect distinct supplied audit records for one snapshot identity.
-Each child reads its assigned evidence and writes one full report to a distinct path.
-Children use direct full reads. They must not use content search across the shared workspace.
-Child metadata lists and parent lists or searches stay at the exact named project root.
-The reports retain the supplied claims. Their `Completed` state proves the report task only.
-The parent reads both reports, both original records, and the manifest after both attributed terminals.
-The parent runs one exact fixture check through the real shell tool.
-The check returns exit code 2 because the raw catalog dependency does not exist.
-The parent must retain both conflicting counts and the exact unavailable dependency.
-The parent must report explicit uncertainty without a majority conclusion, a detected defect, or a repair claim.
-A paired deterministic control supplies matching claims and actual raw records. It requires a resolved result from the successful check.
-
-The oracle checks actual accepted runs, terminal pairs, child contexts, full writes, parent reads, and exact DTO/provider call identities.
-It permits exact unexecuted parent metadata feedback only with its canonical failure code and matching provider pair.
-Every attempted action retains its authority checks. Rejected calls cannot replace a required successful read, child start, or check.
-Project declarations retain their separate canonical success requirement. The final reply must contain only the required JSON object.
-It preserves every source, report, dependency, and checker byte. It archives actual reports before the verdict.
-It rejects missing receipts, foreign identities, invented results, forbidden repairs, and unrelated commands.
-The fixture check uses the existing eval observation deadline. It creates no runtime timeout or recovery rule.
-
-Full reads prove access to the evidence. They do not prove general comprehension.
-Cumulative provider captures can hide identical completed occurrences after compaction.
-An observer failure before verifier entry can prevent report archive capture.
-This case does not prove repair quality, general research truth, or model acceptance without fresh trials.
-
-```bash
-python3 -m unittest discover -s evals -p test_coordination_conflicting_evidence_evals.py -v
-```
-
-### Two writers and a dirty operator checkout
-
-`coordination_two_writers` stays outside the default suite. It uses the existing `collect` observer and child relay.
-The case starts two actual `task-worker` runs in separate registered Git worktrees.
-One writer repairs catalog publication. The other writer repairs exact record selection.
-Each writer supplies one source-only commit, an actual check result, and a separate full report.
-
-```bash
-NETCLAW_EVAL_CASE=coordination_two_writers \
-NETCLAW_EVAL_RUNS=1 NETCLAW_EVAL_THRESHOLD=1 NETCLAW_EVAL_TIMEOUT=300 \
-./evals/run-evals.sh
-```
-
-The 300-second limit bounds eval observation. It adds no runtime task limit.
-Use five independent fresh container, home, session, and relay invocations for the model gate.
-Every failed invocation remains part of the evidence.
-The case-local approval seed permits `git add` and `git commit` within the eval workspace root.
-An explicit `NETCLAW_EVAL_APPROVALS_FILE` override remains authoritative.
-
-The setup retains the operator's staged bytes, unstaged bytes, untracked marker, raw index, branch, and HEAD.
-The parent cannot reset, stash, clean, commit, or integrate the operator checkout.
-The parent reads both actual candidate sources and reports after both terminal deliveries.
-It checks each exact revision, diff, and candidate result before its final JSON response.
-The oracle repeats both checks and compares the final candidate and operator states.
-The oracle archives actual source and report bytes before a verifier failure.
-An observer failure before verifier entry can prevent this later archive.
-Parent `spawn_agent`, `skill_load`, and `set_working_directory` attempts can retain exact typed nonexecution feedback.
-The oracle requires each rejection's actual DTO occurrence and provider pair. It gives that attempt no success credit.
-Child declarations remain strict. Every executed declaration must name its assigned root and return the canonical result.
-Parent provider pair counts require distinct actual DTO occurrences. Repeated cumulative captures do not create additional credit.
-
-The deterministic controls reject missing writers, shared worktrees, false receipts, foreign identities, and unauthorized actions.
-They also reject changed operator bytes, checker changes, later candidate commits, and incomplete parent review.
-The shell control executes the actual setup, prepare, case dispatch, and prompt path.
-It compares complete prompt bytes, including both combined Git commands.
-
-```bash
-python3 -m unittest discover -s evals -p test_coordination_two_writers_evals.py -v
-```
-
-Two isolated writers do not prove overlapping executor schedules or a serialized shared-worktree fallback.
-Cumulative provider captures can hide identical child occurrences after compaction.
-Full parent reads prove access, not complete comprehension.
-This case performs no candidate integration, CI, release, or deployment.
-Its deterministic controls establish no live model success.

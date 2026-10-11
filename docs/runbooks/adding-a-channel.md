@@ -542,7 +542,7 @@ Add cases to
       builder adds **no new tools** (the shared send/lookup tools already
       exist), so no skill update is needed *unless* you change a tool
       schema or add a channel-specific tool — then update
-      `netclaw-operations` and run the eval suite (`./evals/run-evals.sh`)
+      `netclaw-operations` and run the eval suite (`python3 evals/run.py`)
 - [ ] Operational impact documented (this runbook, `CONTRIBUTING.md`
       project-structure list, CLI help if applicable)
 

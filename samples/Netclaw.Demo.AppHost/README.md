@@ -281,7 +281,7 @@ startup when `ExposureMode=Local` and `Daemon.Host != 127.0.0.1/::1`, and
 source IPs. Running the daemon as a container with `0.0.0.0:5299` would
 collide with both checks.
 
-The eval rig (`evals/run-evals.sh`) sidesteps this with
+The eval rig (`evals/run.py`) sidesteps this with
 `docker run --network host`, but Aspire's container model doesn't cleanly
 express host networking, and `--network host` is Linux-only (degraded on
 Mac/Windows Docker Desktop). For the demo we run the daemon as a host

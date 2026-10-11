@@ -1041,7 +1041,7 @@ Done when:
 
 PR #2417 follow-up:
 
-- [ ] Run `./evals/run-evals.sh` after the operator sets the provider type, endpoint, and model ID through `NETCLAW_EVAL_*`.
+- [ ] Run `python3 evals/run.py` after the operator sets the provider type, endpoint, and model ID through `NETCLAW_EVAL_*`.
   The local runner rejects the current environment because these values are unset.
 
 #### Task 0.5: Add audit tests for plan-critical config editors

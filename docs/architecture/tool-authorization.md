@@ -1432,7 +1432,7 @@ and the approval tooling is in
 | Session roots follow the audience. | `PathAccessPolicy` tests; the path access mutation gate |
 | Shell facts stay general. | The shell analysis and shell assignment mutation gates; `ShellPolicyEvidenceFixtureTests` |
 | An unanswered request survives restart. | `ApprovalRehydrationTests`; `ShellApprovalLifecycleIntegrationTests` |
-| Non-interactive runs cannot get new consent. | Evals Category 9 in `evals/run-evals.sh`; `evals/background_evals.py` |
+| Non-interactive runs cannot get new consent. | Approval lifecycle tests; the child-run observer fixtures |
 | `skill_manage` mutations refuse links and protected paths. | `SkillToolTests`; the skill_manage guard mutation gate ([TOOLING.md § Skill Manage Guard Gate](../../TOOLING.md#skill-manage-guard-gate)) |
 | A shell grant never authorizes `file_read`. | No test yet. Consolidation PR 1b adds it. |
 | `ToolAuthorizer` gives the same decision as the gate on `dev`. | The corpus differential ([TOOLING.md § Authorization Corpus Differential](../../TOOLING.md#authorization-corpus-differential)) |
@@ -1442,10 +1442,10 @@ and the approval tooling is in
 
 Model guidance (which tool the model should choose, and how it should declare
 a project directory) is not an authorization rule, and no spec owns it. The
-tool descriptions and `ToolChoiceGuidance` own that text, and evals Category 9
-in `evals/run-evals.sh` measure its effect. A guidance change must not change
-an authorization outcome; the case catalog and the outcome direction check
-catch such a change.
+tool descriptions and `ToolChoiceGuidance` own that text. The compliance
+scorer in `evals/run.py` can measure its coarse effect. A guidance change must
+not change an authorization outcome; the case catalog and the outcome direction
+check catch such a change.
 
 Evidence fixtures live in
 [`src/Netclaw.Security.Tests/Evidence/`](../../src/Netclaw.Security.Tests/Evidence/README.md).

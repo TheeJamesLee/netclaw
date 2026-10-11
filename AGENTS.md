@@ -421,7 +421,7 @@ must be fixed or explicitly baselined with justification.
 
 ## Eval Suite
 
-Run the behavioral eval suite (`./evals/run-evals.sh`) only when changing
+Run the behavioral eval suite (`python3 evals/run.py`) only when changing
 the prompt or identity grounding that the agent reads:
 
 - Identity file templates (`SOUL.md`, `AGENTS.md`, `TOOLING.md` in init wizard)
