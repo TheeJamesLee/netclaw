@@ -43,11 +43,11 @@ dotnet run --project samples/Netclaw.Demo.AppHost
 ```
 
 That launches the `fast` profile by default. It keeps the seeded Mattermost
-channel on the `public` audience, caps tool loops aggressively, tunes Ollama
-for single-user local inference, disables Ollama thinking mode, and prewarms
-the model before the daemon starts. The goal is the fastest possible first
-reply on a fresh clone while still exercising the full Aspire-orchestrated
-stack.
+channel on the `public` audience, tunes Ollama for single-user local inference,
+disables Ollama thinking mode, and prewarms the model before the daemon starts.
+It still uses Netclaw's exact in-memory recurrence guard; it sets no
+tool-iteration cap. The goal is the fastest possible first reply on a fresh
+clone while still exercising the full Aspire-orchestrated stack.
 
 If you want the heavier tool-rich demo path instead, opt into the `full`
 profile:

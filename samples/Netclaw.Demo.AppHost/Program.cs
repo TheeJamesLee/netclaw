@@ -125,9 +125,7 @@ var daemon = builder.AddProject<Projects.Netclaw_Daemon>("daemon")
 
 if (demoProfile == DemoProfile.Fast)
 {
-    daemon = daemon
-        .WithEnvironment("NETCLAW_Session__MaxToolIterationsPerTurn", "1")
-        .WithEnvironment("NETCLAW_Providers__ollama__VendorOptions__DisableThinking", "true");
+    daemon = daemon.WithEnvironment("NETCLAW_Providers__ollama__VendorOptions__DisableThinking", "true");
 }
 
 // Opt the daemon into OTLP export against the Aspire dashboard's OTLP

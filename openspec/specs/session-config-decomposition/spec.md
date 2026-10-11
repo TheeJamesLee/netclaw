@@ -93,7 +93,6 @@ second per timeout.
 
 - **WHEN** a default `SessionConfig` is constructed
 - **THEN** `IdleTimeout` is 30 minutes
-- **AND** `MaxToolIterationsPerTurn` is 60
 - **AND** `MemoryObserverIdleSeconds` is 90
 - **AND** `TurnLlmTimeout` is 3 minutes
 - **AND** `ToolExecutionTimeout` is 90 seconds
@@ -105,14 +104,20 @@ The `netclaw-config.v1.schema.json` Session section SHALL use
 `additionalProperties: false` with explicit property definitions. Unknown
 properties in the Session section SHALL be rejected by schema validation.
 
-The Session schema SHALL define `MaxToolIterationsPerTurn` and SHALL NOT define
-`MaxToolCallsPerTurn`.
+The Session schema SHALL NOT define `MaxToolCallsPerTurn` or
+`MaxToolIterationsPerTurn`.
 
 #### Scenario: Valid Session config passes schema validation
 
-- **GIVEN** a `netclaw.json` with `"Session": { "MaxToolIterationsPerTurn": 50 }`
+- **GIVEN** a `netclaw.json` with `"Session": { "TurnLlmTimeoutSeconds": 120 }`
 - **WHEN** schema validation runs
 - **THEN** validation passes
+
+#### Scenario: Removed tool-iteration limit rejected
+
+- **GIVEN** a `netclaw.json` with `"Session": { "MaxToolIterationsPerTurn": 50 }`
+- **WHEN** schema validation runs
+- **THEN** validation fails with an error identifying the unknown property
 
 #### Scenario: Stale tool-call limit property rejected
 
@@ -142,4 +147,3 @@ DI as a singleton and resolved automatically by Akka.Hosting's `resolver.Props<>
 - **WHEN** `SessionToolServices` is resolved
 - **THEN** it is null
 - **AND** the session actor operates without tool execution capability
-
