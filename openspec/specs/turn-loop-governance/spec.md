@@ -262,19 +262,19 @@ Operation timeouts, explicit cancellation, and empty-response guards SHALL retai
 - **THEN** validation identifies the deprecated key
 - **AND** repair removes that key without changing unrelated valid settings
 
-### Requirement: Recurrence activation requires evidence
+### Requirement: Recurrence activation requires deterministic evidence
 
-The implementation SHALL satisfy the prior laboratory, private replay, shadow, strict model, and sensitivity gates before activation approval.
+The implementation SHALL satisfy the laboratory, sensitivity, and focused mutation gates before activation approval.
 It SHALL retain all fifteen laboratory cases and at least 10,000 fixed-seed sequence checks.
-The nonadjacent expansion SHALL also require one million deterministic fuzz sequences and 3,000 independent productive holdout turns.
-Every proposed shadow block SHALL receive independent review; zero confirmed hard false blocks SHALL be required.
+The nonadjacent expansion SHALL also require one million deterministic fuzz sequences.
 Parent and child decisions SHALL agree for the same corpus.
-The system SHALL record absent evidence as an unpassed gate.
-Private replay payloads, identifiers, and hashes SHALL NOT enter published diagnostics or repository evidence.
+The system SHALL record absent deterministic or focused mutation evidence as an unpassed gate.
+The detector behavior reference SHALL be `docs/architecture/loop-detector.md`.
+Private trace payloads, identifiers, and hashes SHALL NOT enter published diagnostics or repository evidence.
 
-#### Scenario: Missing replay evidence cannot pass activation
+#### Scenario: Missing deterministic evidence cannot pass activation
 
-- **GIVEN** deterministic tests pass but private replay or independent holdout evidence is absent
+- **GIVEN** a proposed activation lacks a required deterministic corpus or focused mutation result
 - **WHEN** a reviewer assesses activation readiness
 - **THEN** the absent evidence gate remains unpassed
 

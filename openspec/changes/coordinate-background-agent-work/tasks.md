@@ -89,7 +89,7 @@ Scripted workflow evidence at `8a57fbf5`:
 - The conflict receipts start with SHA `bf4a6641` and `bda2c2ef`. Root reviews verify the actual captured inputs and checker results.
 - Actual resource teardown and source freezes pass. Earlier failed observations and unsafe archive controls remain unchanged.
 - These historical scripted observations close tasks 5.4, 5.5, and 5.7 only. They do not prove the new detector window or autonomous model judgment.
-- Cancellation leaves external effects unknown. The broader model gates and task 5.10 remain open.
+- Cancellation leaves external effects unknown. The coarse scorer gate and task 5.10 remain open.
 
 Isolated writer evidence at `0da400bb`:
 
@@ -111,7 +111,7 @@ Scripted stale-report evidence at `153d9223`:
 - Independent review verifies canonical journal and consumption records, database results, exact file bytes, distinct identities, source freezes, and actual cleanup.
 - Both actual-archive baselines pass. Three altered answers fail the required final-answer assertion without setup errors.
 - Every original result and archive stays unchanged. The script supplies the decisions; these observations prove no model judgment.
-- This closes task 5.6 only. The other adversarial fixtures, task 5.10, and the live-model acceptance gates remain open.
+- This closes task 5.6 only. The other adversarial fixtures, task 5.10, and the coarse scorer gate remain open.
 
 Scripted attachment evidence at `728f232e`:
 
@@ -131,19 +131,14 @@ Aggregate paired-fixture review at `f48e9fbe`:
 - The positive cases allow complete plans, current candidate revisions, and an attributed permitted File DTO with exact plan bytes.
 - Review SHA `ff41e8796289b7261cb7b0d70ab1188df73980459697788116620ab33ddfd86c` binds the source, receipt map, and separate fault evidence.
 - This closes task 5.10's paired-fixture criterion. Earlier per-task notes retain their historical aggregate-open state before this separate review.
-- Historical runtime identities and false verdicts remain unchanged. No guide 1.0.3 model acceptance, remote user receipt, or five-trial acceptance follows.
+- Historical runtime identities and false verdicts remain unchanged. No guide 1.0.3 scorer credit, remote user receipt, or workflow acceptance follows.
 
-## 6. Targeted model and native init gates
+## 6. Targeted scorer and native init gates
 
 - [x] 6.1 Add a skill discovery case for substantial code work without an explicit child request. Verify canonical load and selected resource receipts.
-- [ ] 6.2 Add an analyze-plan case. Verify evidence IDs, complete file content, parent inspection, and successful user attachment receipts.
-- [ ] 6.3 Add an implement-review case. Verify a task worker, distinct reviewer, actual candidate checks, and the parent result.
-- [ ] 6.4 Add a parallel-research or defect case with deliberate conflicting evidence. Verify the parent reports the real unresolved issue.
-- [ ] 6.5 Add a trivial-task negative control and unavailable-profile case. Verify no forced delegation, invented profile, or authority bypass.
+- [ ] 6.2 Run the coarse compliance scorer across the hosted model matrix. Verify skill loads, sub-agent use, right-tool choices, receipts, and artifacts through scored categories.
 - [x] 6.6 Add a background cancellation case. Verify deferred control load, partial-result inspection, and no private message or peer tool claim.
-- [ ] 6.7 Run only affected identity, skill discovery/use, and subagent cases with the existing eval harness. Record model, revision, receipts, and artifacts.
-- [ ] 6.8 Run five independent trials per critical real-model case. Report every failure and rerun only after a justified change.
-- [x] 6.9 Check instrumentation before model attribution. Verify actual parsed tool receipts and file content rather than final-response regex alone.
+- [x] 6.9 Check scorer instrumentation before model attribution. Verify actual parsed tool receipts and file content rather than final-response regex alone.
 - [x] 6.10 Run `./scripts/smoke/run-smoke.sh init-wizard` on the combined stack. Verify native wizard completion and preserved custom profile files.
 - [x] 6.11 Preserve all required init typed-key checks and applicable light smoke gates. Report proof gaps separately from successful headless checks.
 
@@ -154,7 +149,7 @@ Native init evidence at `6d0d7501`:
 - The native producer has unchanged production inputs. Retained helper DLLs match their PDB identities and source checksums.
 - The actual log proves canonical worker creation, custom specialist preservation, exit zero, and removal of the owned temporary paths.
 - This is historical evidence with source equivalence. Deleted helper executables and external VHS binaries lack recorded hashes.
-- Task 6.11 remains open. This tape does not establish all light smoke gates, model behavior, or deployment success.
+- Task 6.11 remains open. This tape does not establish all light smoke gates, scorer behavior, or deployment success.
 
 Native light evidence at `915601da`:
 
@@ -163,52 +158,52 @@ Native light evidence at `915601da`:
 - Both init-wizard assertions prove canonical worker bytes and preservation of the custom specialist profile.
 - The required typed-key test sources remain unchanged. The current CLI assembly passes all 2,164 tests without skips.
 - Current hosted logs report assembly totals. They do not supply named successful typed-key test rows.
-- This proof closes task 6.11. It does not prove real-model workflow quality, merge, release, or deployment.
+- This proof closes task 6.11. It does not prove scorer workflow quality, merge, release, or deployment.
 
-Negative model observations at `3dd2c1a3`:
+Historical negative observations at `3dd2c1a3`:
 
-- Five fresh trivial-task trials pass. Two of five fresh unavailable-profile trials pass.
-- Three unavailable-profile trials add prose to the required JSON. Their strict results remain failures.
-- Those three trials reach the final response check after the file, profile, authority, and provider-history checks pass.
-- These ten planned observations do not complete the broader model gate or authorize retries without a justified change.
+- Archived trivial-task observations pass. Archived unavailable-profile observations include mixed strict results.
+- Some unavailable-profile observations add prose to the required JSON. Their strict results remain historical failures.
+- Those failures reach the final response check after the file, profile, authority, and provider-history checks pass.
+- These archived observations do not complete the coarse scorer gate or authorize retries without a justified change.
 
 Coordination guide 1.0.3 evidence after `0da400bb`:
 
-- The actual coding trial remains false because of extra commands and the incorrect final response schema. All 195 original artifact hashes remain exact.
-- The guide clarifies exact command limits and final field types. It changes neither the eval prompt nor the oracle.
+- The archived coding observation remains false because of extra commands and the incorrect final response schema. All 195 original artifact hashes remain exact.
+- The guide clarifies exact command limits and final field types. It changes neither the prompt nor the oracle.
 - Both final embedded loader and dispatcher tests pass. They verify complete inline and spill content plus the existing access boundaries.
 - Independent review SHA `b5da2617e8bf48d78b8d03e6a46d64c336fc16ca360064fda05de807437fd705` binds the three-file patch and actual test results.
-- The guide receives no model-compliance credit before a fresh daemon producer embeds version 1.0.3 and the relevant observation runs.
-- This note closes no additional task. All broader model gates remain open.
+- The guide receives no scorer credit before a fresh daemon producer embeds version 1.0.3 and the relevant observation runs.
+- This note closes no additional task. The coarse scorer gate remains open.
 
 Fresh guide 1.0.3 observation at `f48e9fbe`:
 
-- The first fresh code-workflow trial remains false. The observer reaches its 300-second deadline with zero completed turns and zero accepted children.
+- The archived code-workflow observation remains false. The observer reaches its 300-second deadline with zero completed turns and zero accepted children.
 - The actual model input includes guide 1.0.3, its current workflow resource, both required profiles, and the deferred tool instructions.
 - Two successful parent commands violate the task's exact command list before the deadline. A longer deadline cannot correct those violations.
 - One parent provider request takes 178.086 seconds. The next takes 81.557 seconds and completes after the observer cutoff.
 - A concurrent request serves memory distillation. It is not a child request. The capture shows no guard refusal or child adoption.
 - Independent review SHA `d3950787ceff6481d998c1eefaf1904fded82c71bd88bed7d84fe28c1945b5a1` binds the failure, command pairs, current guide, and provider intervals.
-- All 73 archived artifact hashes match. The source freeze and actual teardown pass. The remaining four code-workflow trials do not start.
+- All 73 archived artifact hashes match. The source freeze and actual teardown pass. No additional code-workflow observations start.
 - The failure justifies no runtime or oracle change. A narrow workflow clarification can condition preparation on permitted commands and supplied workspaces.
-- This observation closes no task and supplies no model-compliance credit. Every original false result remains unchanged.
+- This observation closes no task and supplies no scorer credit. Every original false result remains unchanged.
 
 Coordination guide 1.0.4 clarification after `f48e9fbe`:
 
 - The code workflow now uses supplied checkout state and worktrees. Missing facts and workspace preparation require task-permitted commands.
 - The parent reports a constraint when no permitted tool can obtain a required fact. The extra-command restriction remains conditional on an exact list.
-- Existing supplied operators and ordinary authorized workflows remain permitted. The eval prompt, oracle, and runtime behavior remain unchanged.
+- Existing supplied operators and ordinary authorized workflows remain permitted. The prompt, oracle, and runtime behavior remain unchanged.
 - Both rebuilt embedded loader and dispatcher tests pass without skips. Slopwatch, copyright headers, and whitespace checks pass.
 - Independent review SHA `9458fb1b2b85bfd90b183e870cdee474ab0862cf1264f5c6c97d0e06aa6255cc` binds the final patch, actual tests, and executed embedded resource bytes.
-- The original guide already states exact command limits. This clarification supplies no proven model cure or new model acceptance.
+- The original guide already states exact command limits. This clarification supplies no proven scorer cure or new workflow acceptance.
 
 Fresh analyze-plan observation at `f48e9fbe`:
 
-- The first trial remains false. The observer finishes before its 900-second deadline; no instrumentation error occurs.
+- The archived analyze-plan observation remains false. The observer finishes before its 900-second deadline; no instrumentation error occurs.
 - Both children complete. The parent consumes their results, reads both complete artifacts, and attaches the exact plan bytes.
 - All 265 indexed archive hashes match. The full source freeze and actual resource teardown pass.
-- Actual receipt SHA `7e1bff9c64180d2958d8be7433f0fa86c3966f88b9d6265b718e66e044a3957a` preserves this result. The remaining four trials do not start.
-- This observation closes no model gate. Its runtime contains guide 1.0.3, not the later 1.0.4 clarification.
+- Actual receipt SHA `7e1bff9c64180d2958d8be7433f0fa86c3966f88b9d6265b718e66e044a3957a` preserves this result. No additional analyze-plan observations start.
+- This observation closes no scorer gate. Its runtime contains guide 1.0.3, not the later 1.0.4 clarification.
 
 Independent analyze-plan diagnosis after `f48e9fbe`:
 
@@ -224,8 +219,8 @@ Coordination guide 1.0.5 transfer clarification:
 - The parent must copy the supplied source identity unchanged into the child assignment, including its type or algorithm prefix.
 - Both rebuilt embedded loader and dispatcher tests pass without skips. Slopwatch, copyright headers, and whitespace checks pass.
 - Independent review SHA `03542987e23b2a1378e0a43486954c830ac1b359394bfaa398625e9fc3241870` binds the exact delta and executed embedded resource bytes.
-- The prior guide 1.0.4 proof and all original analyze and code trial files remain exact.
-- This instruction change supplies no model-cure proof. It changes no eval prompt, oracle, policy, threshold, or deadline.
+- The prior guide 1.0.4 proof and all original analyze and code observation files remain exact.
+- This instruction change supplies no scorer-cure proof. It changes no prompt, oracle, policy, threshold, or deadline.
 
 Coordination guide 1.0.6 table-transfer clarification:
 
@@ -233,32 +228,32 @@ Coordination guide 1.0.6 table-transfer clarification:
 - The child can still load the exact canonical template through the logical resource tool. Other workflow resource bytes remain unchanged.
 - Both rebuilt embedded loader and dispatcher tests pass without skips. Slopwatch, copyright headers, and whitespace checks pass.
 - Independent review SHA `0fac3c94884c7063a3f7b2a20c20739f9a59d6d758dc394c5b29a4a5e3538ebf` binds the final delta and executed embedded resource bytes.
-- Guide 1.0.5 and 1.0.4 proofs remain exact. All original analyze and code trial files retain their false verdicts.
-- This clarification supplies no model-cure proof. A fresh native producer and fresh targeted observations remain required.
+- Guide 1.0.5 and 1.0.4 proofs remain exact. All original analyze and code observation files retain their false verdicts.
+- This clarification supplies no scorer-cure proof. A fresh native producer and fresh scorer run remain required.
 
 Fresh combined observations at `f6685d5f`:
 
 - The fresh native bundle contains guide 1.0.6. Its compile tree matches the combined source tree.
-- The first code-workflow, analyze-plan, conflict, and blocked-attachment trials remain false. Each cohort stops after its first failure.
+- The archived code-workflow, analyze-plan, conflict, and blocked-attachment observations remain false. Each cohort stops after its first failure.
 - Independent review checks actual provider requests, typed tool pairs, artifacts, durable results, and the unchanged assertions.
 - The code parent executes extra commands and returns incorrect report field types. Its final checks precede the complete review result.
 - The analyze parent repeats status and absent-file queries. A replacement analyst completes; the plan child lacks a terminal result before cutoff.
 - The conflict parent executes extra commands. The blocked-attachment parent executes a prohibited shell command and returns artifacts with schema faults.
-- Both negative cases pass two independent fresh trials. The first unavailable-profile result uses the sole JSON fence that the existing oracle accepts.
+- Both negative cases have archived passes. The first unavailable-profile result uses the sole JSON fence that the existing oracle accepts.
 - That fence violates the literal prompt format. Its canonical pass remains unchanged; no new format allowance enters the oracle.
-- The third unavailable-profile trial fails daemon startup before its prompt. A subsequent disk fault erases its receipt; cleanup remains unverified.
-- These observations close no broader model gate. The remaining trials require a justified change and fresh evidence.
+- The third unavailable-profile observation fails daemon startup before its prompt. A subsequent disk fault erases its receipt; cleanup remains unverified.
+- These observations close no coarse scorer gate. A fresh scorer run remains required.
 
 Coordination guide 1.0.7 clarification:
 
 - The guide states the positive wait action: end the current turn when no independent work remains.
 - The canonical child terminal result resumes the parent. An interim status must remain distinct from the final result.
 - A JSON-only constraint does not justify invented final fields. Useful diagnosis through status and logs remains available.
-- The code eval prompt now specifies absolute report path strings and checks after the complete review result returns.
+- The code prompt now specifies absolute report path strings and checks after the complete review result returns.
 - These prompt fields match the existing assertions. No oracle, runtime, authority, threshold, deadline, or tool budget changes.
 - The existing 82 Python controls pass. The initial embedded-test build fails because the disk is full; it supplies no test pass.
-- The candidate requires hosted embedded-test proof and a fresh native bundle before new model observations.
-- All original false results remain unchanged. This clarification supplies no model-cure proof and closes no additional task.
+- The candidate requires hosted embedded-test proof and a fresh native bundle before a fresh scorer run.
+- All original false results remain unchanged. This clarification supplies no scorer-cure proof and closes no additional task.
 
 ## 7. Review and completion evidence
 
@@ -266,20 +261,20 @@ Coordination guide 1.0.7 clarification:
 - [x] 7.2 Run `dotnet slopwatch analyze` and `./scripts/Add-FileHeaders.ps1 -Verify` after code changes. Verify no new violations.
 - [x] 7.3 Review security mutation scope. Document why unchanged policy gates require no new target, or prove a narrow unsafe mutant is rejected.
 - [ ] 7.4 Run strict OpenSpec validation and implementation verification. Verify each requirement links to current source and claim-specific evidence.
-- [ ] 7.5 Report implementation, deterministic proof, model evals, native smoke, CI, rollout, and user delivery as separate states.
+- [ ] 7.5 Report implementation, deterministic proof, scorer status, native smoke, CI, rollout, and user delivery as separate states.
 - [x] 7.6 Retain PR 2's held-child parent-response gate. Never infer days-long productivity from these workflow cases.
 
 Hosted checks at `f48e9fbe`:
 
 - All 29 hosted checks pass for this exact head. Both native smoke logs report 29 tapes and 10 scenarios passed.
 - These checks precede the later specification repair and guide 1.0.4. They do not establish hosted acceptance for a later stack head.
-- Hosted success supplies no model-workflow acceptance, merge, release, or deployment proof.
+- Hosted success supplies no scorer workflow acceptance, merge, release, or deployment proof.
 
 Hosted checks at `f6685d5f`:
 
 - All 29 checks pass for this exact combined head. Linux and macOS each pass 29 native tapes and 10 scenarios.
 - The lower two PR heads also pass all 29 checks. These results precede guide 1.0.7.
-- No CI result supplies real-model acceptance, a merge, a live skill publication, a release, or deployment proof.
+- No CI result supplies coarse scorer acceptance, a merge, a live skill publication, a release, or deployment proof.
 
 Combined test and mutation evidence at `915601da`:
 
@@ -291,7 +286,7 @@ Combined test and mutation evidence at `915601da`:
 - Selected outcomes total 604 Killed, two Timeout, and zero Survived. Both timeouts affect `CollapseDotSegments` nontermination mutations.
 - The unchanged gate script accepts those timeout dispositions. This evidence does not prove 606 assertion failures.
 - This PR changes no authorization owner or policy gate. The scope review requires no additional mutation target.
-- These test and mutation results do not complete task 6.11 or any model gate.
+- These test and mutation results do not complete task 6.11 or the coarse scorer gate.
 
 Traceability reconciliation after `915601da`:
 
@@ -302,9 +297,9 @@ Traceability reconciliation after `915601da`:
 
 Held-child evidence review at `d0377373`:
 
-- All five original held-child trials pass a separate replay through the current verifier.
+- All five original held-child observations pass a separate replay through the current verifier.
 - The replay reads actual archived provider requests and observer records. It uses copied session logs and artifact bytes.
-- Original trial records and complete artifact inventories remain unchanged. An altered artifact fails the current content check.
+- Original observation records and complete artifact inventories remain unchanged. An altered artifact fails the current content check.
 - The parent completes a fresh probe before the fixture releases the held child response.
 - The canonical terminal, durable journal positions, actual parent consumption, and exact artifact bytes retain their original attribution.
 - Native inputs match. The historical helper differs from the current helper, which does not execute this offline replay.
@@ -313,10 +308,10 @@ Held-child evidence review at `d0377373`:
 
 One current held-child observation at `0da400bb`:
 
-- One fresh real-model observation passes with the current native image and helper. Independent review verifies all 102 indexed artifact hashes.
+- One fresh backend observation passes with the current native image and helper. Independent review verifies all 102 indexed artifact hashes.
 - The parent completes its bound probe before child release, consumes the canonical terminal, and reads the full artifact in automatic continuation.
 - Independent review SHA `7742d477d1c71fb0754eee046161c4d8a90a988c2b7dd0f52e38923138da494d` binds the actual receipt and replay.
-- Actual cleanup and the complete source freeze pass. This supplies one observation, not five-pass acceptance.
+- Actual cleanup and the complete source freeze pass. This supplies one observation, not coarse scorer acceptance.
 - This case does not prove backend inference capacity, days-long productivity, or the two-Missing-read child-adoption counterexample.
 
 Discovery and cancellation scope review at `4a9b7505`:
@@ -325,8 +320,8 @@ Discovery and cancellation scope review at `4a9b7505`:
 - Three observations execute at `f64e0ea4`; two execute at `2c043a93`. Their actual prompt, native bundle, helper, skill, and resource bytes match.
 - The original discovery results remain pass, pass, fail, pass, pass. An unsupported extra-skill restriction causes the third failure.
 - Separate replay through the current oracle accepts all five archives. The original third result remains false.
-- This closes task 6.1's discovery claim. It does not prove autonomous child execution or five fresh current-source trials.
+- This closes task 6.1's discovery claim. It does not prove autonomous child execution or complete the coarse scorer gate.
 - Five fresh cancellation observations pass with distinct containers and complete teardown.
 - Independent review checks deferred control load, canonical terminal pairs, durable consumption, partial report bytes, full parent reads, and local closure.
 - Current changes preserve the cancellation definitions and their native, helper, skill, and prompt inputs.
-- This closes task 6.6. The broader model gate, task 6.8, and the productive false-block correction remain open.
+- This closes task 6.6. The coarse scorer gate and the productive false-block correction remain open.

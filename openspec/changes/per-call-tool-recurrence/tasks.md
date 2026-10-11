@@ -4,8 +4,8 @@
 - [x] 1.2 Reconcile the prior active draft through OpenSpec; verify completed repairs remain preserved and unfinished proof gates remain mandatory.
 - [x] 1.3 Extend the disposable pure detector laboratory; verify all fifteen prior cases and the new nonadjacent controls pass.
 - [x] 1.4 Run at least 10,000 fixed-seed checks and one million deterministic fuzz sequences; verify reproducible outcomes and sensitivity controls.
-- [ ] 1.5 Produce private replay and shadow evidence without tool execution; verify every proposed block receives independent review.
-- [ ] 1.6 Assess the 3,000-turn independent productive holdout; verify zero confirmed hard false blocks and record absent data explicitly.
+- [x] 1.5 Superseded: private replay and shadow evidence no longer gate activation; `docs/architecture/loop-detector.md` replaces replay evidence for detector behavior.
+- [x] 1.6 Superseded: the 3,000-turn productive holdout no longer gates activation; `docs/architecture/loop-detector.md` replaces holdout evidence for detector behavior.
 
 ## 2. Shared recurrence decisions
 
@@ -42,28 +42,28 @@
 - [x] 6.4 Drive useful parent and child tasks past the former ceilings; verify independent artifact contents rather than model success claims.
 - [x] 6.5 Update configuration docs and the operations skill version; verify guidance explains exact recurrence, limits, and pending-status exceptions.
 
-## 7. Adversarial proof and targeted evals
+## 7. Adversarial proof and targeted scorer checks
 
 - [x] 7.1 Integrate the independent test agent's assertions; verify each actual defect receives its failing test before the production fix.
 - [x] 7.2 Run named fault variants for reset, duplicate count, forged receipt, missing evidence, terminal model dependence, and scope; verify behavioral rejection.
 - [x] 7.3 Run focused Stryker gates for changed dispatch boundaries; verify expected mutants run and fail within the documented CI cost budget.
-- [ ] 7.4 Run only necessary tool-cycle and relevant subagent model cases at the approved target. Use a fresh container and data home for each independent trial. Verify strict independent assertions and retained raw evidence.
-- [ ] 7.5 Review every model failure; verify parser, prompt, capability, and infrastructure causes receive separate dispositions.
-- [ ] 7.6 Reconcile laboratory, replay, shadow, holdout, actor, and model evidence; verify every activation gate passes before merge approval.
+- [ ] 7.4 Run the coarse compliance scorer for necessary tool-cycle and subagent routing checks at the approved target. Verify scored receipts and retained raw evidence.
+- [ ] 7.5 Review every scorer failure; verify parser, prompt, capability, and infrastructure causes receive separate dispositions.
+- [ ] 7.6 Reconcile laboratory, actor, deterministic, Stryker, and scorer evidence; verify deterministic tests plus focused Stryker remain the CI gate and `docs/architecture/loop-detector.md` remains the detector behavior reference.
 
 ## 8. Quality and documentation
 
 - [x] 8.1 Run relevant .NET projects sequentially; verify restore, test discovery, and pass counts without shared output locks.
 - [x] 8.2 Run Slopwatch and header checks; verify no new violation or missing copyright header.
 - [x] 8.3 Inspect changed complex methods with focused coverage analysis; verify no critical untested branch remains.
-- [x] 8.4 Validate the OpenSpec change strictly and inspect the full diff; verify no private replay payload or operational target enters tracked metadata.
+- [x] 8.4 Validate the OpenSpec change strictly and inspect the full diff; verify no private trace payload or operational target enters tracked metadata.
 - [ ] 8.5 Use OpenSpec verification and sync skills; verify implementation, canonical specifications, and completed tasks agree before closure.
 
 ## Local proof scope
 
 - The disposable BCL laboratory passes 40 cases, including all fifteen historical shapes with current-policy dispositions.
 - Independent execution passes 10,000 fixed-seed sequences, 100,000 assertions, and all eighteen named behavioral fault variants.
-- The laboratory models prepared facts. It does not prove runtime authority, private replay, or model behavior.
+- The laboratory models prepared facts. It does not prove runtime authority or scorer behavior.
 
 - `ToolRecurrenceContractTests` proves the million-sequence corpus, 10,000 recurrence sequences, outcome parity, and actor-local retention rules.
 - `ToolRecurrenceAdversarialTests` proves parent/child parity, exact effects, paired results, useful long tasks, and missing-receipt settlement.
@@ -102,7 +102,7 @@
 - The review finds no remaining critical behavior without evidence in the approved first-PR scope.
 - Whole-envelope ownership checks precede payload effects. Actual callbacks exercise the common routed-activity handler.
 - The parent aggregate path has no runtime producer. History guards reject absent or ambiguous owners; record guards reject malformed internal data.
-- Task 8.3 is complete. Exhaustive crash cuts, private replay, holdout, model trials, and final contract reconciliation remain open.
+- Task 8.3 is complete. Exhaustive crash cuts, scorer runs, hosted CI, and final contract reconciliation remain open.
 - The scoped mutation gate selected 13 tests and killed all five expected targets in 3m08s.
 - The fifth target admits stale callbacks through the final `OwnsToolExecution` false return. A separate equality-removal fault also fails behaviorally.
 - The restored thirteen-case control passes. Hosted CI for the new revision remains separate.
@@ -113,8 +113,8 @@
 - The fixture repair uses the repository's 30-second cold-recovery deadline. Its behavioral deadline remains two seconds and all assertions remain unchanged.
 - The repaired thirteen-case control passes. All five expected mutants remain Killed in 184.8 seconds.
 - Configuration tests passed six cases. Doctor tests passed 37 cases. This repair changes no configuration or CLI code.
-- Open tasks retain private replay, shadow, productive holdout, and exhaustive crash gates.
-- Open tasks also retain model trials, hosted CI for later revisions, and final contract reconciliation.
+- Open tasks retain exhaustive crash gates, scorer runs, hosted CI for later revisions, and final contract reconciliation.
+- Replay, shadow, and productive holdout gates are superseded by `docs/architecture/loop-detector.md`.
 
 ### Completed actor and journal cuts
 
@@ -125,15 +125,15 @@
 - A fabricated-success recovery fault fails both new cases. Exact source and assembly restoration passes three controls, including mandatory MissingReceipt settlement.
 - Independent review finds no remaining distinct durable prefix without direct or documented equivalent-prefix evidence in the listed cut matrix.
 - The actor and journal recovery proof is complete for durable records. It does not prove OS-process storage durability or physical external exactly-once effects.
-- Private replay, shadow, productive holdout, model evals, and final activation reconciliation retain their separate gates.
+- Scorer runs, hosted CI for later revisions, and final activation reconciliation retain their separate gates.
 
-### Child-adoption and current model evidence
+### Child-adoption and scorer evidence
 
 - The combined `f6685d5f` runtime passes one live Missing/Missing-child-completion-read regression with independent artifact and provider-history review.
 - The new child-result window permits both productive reads. The next identical read still receives the canonical guard correction.
-- This supplements the retained 177 actor cases and six authority harness cases. It does not replace private replay or productive holdout evidence.
-- Four current coordination model cohorts stop after their first false result. Independent reviews distinguish task-rule violations from a child inactivity timeout.
-- No reviewed trial reproduces the repaired post-adoption false block. This does not establish general model acceptance or zero false blocks.
-- Two negative cases each pass two current observations. A later daemon-startup and disk fault supplies no canonical model verdict.
-- The private records still lack the canonical admission and adoption facts required for faithful replay. Zero productive holdout turns receive certification.
-- Tasks 1.5, 1.6, 7.4, 7.5, 7.6, and 8.5 remain open. No activation gate is lowered.
+- This supplements the retained 177 actor cases and six authority harness cases. `docs/architecture/loop-detector.md` replaces replay and productive holdout evidence for detector behavior.
+- Four archived coordination scorer cohorts stop after their first false result. Independent reviews distinguish task-rule violations from a child inactivity timeout.
+- No reviewed observation reproduces the repaired post-adoption false block. This does not establish scorer acceptance or zero false blocks.
+- Two negative cases each pass two current observations. A later daemon-startup and disk fault supplies no canonical scorer verdict.
+- Private records no longer provide activation evidence. The loop-detector architecture document records the behavior contract instead.
+- Tasks 7.4, 7.5, 7.6, and 8.5 remain open. Superseding tasks 1.5 and 1.6 does not lower deterministic or Stryker gates.

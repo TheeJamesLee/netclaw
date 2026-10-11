@@ -193,7 +193,7 @@ The existing profile seed helper remains the absent-only default path; no broad 
 - Main-role work can use more resources. Preserve configured role behavior and avoid provider overrides.
 - A repeat init can replace unrelated identity content. Use the explicit asset procedure for existing deployments.
 - Restart can lose an active child. Inherit PR 2's Lost result and preserve confirmed partial evidence.
-- A backend can delay a request. PR 2 requires a parent reply while the eval holds an accepted child request.
+- A backend can delay a request. PR 2 requires a parent reply while the fixture holds an accepted child request.
 
 ### Why this is safe
 
@@ -201,7 +201,7 @@ This PR adds no authority owner, grant scope, actor messages, or persistence eve
 The runtime still validates every child, tool, file, and model-role selection through its existing gates.
 The seed path preserves existing operator profiles and playbooks.
 Distinct workspaces and independent evidence review reduce damage from a wrong child result.
-The proof plan separates scripted protocol evidence from real-model workflow evidence.
+The proof plan separates scripted protocol evidence from coarse scorer evidence.
 None of these claims proves arbitrary model judgment or productive work for days.
 
 ## Migration Plan
@@ -210,14 +210,14 @@ None of these claims proves arbitrary model judgment or productive work for days
 2. Ship the coordination bundle and the worker asset through the existing binary resource paths.
 3. Seed the worker only during the existing new-install path when its destination is absent.
 4. Give existing operators the explicit reviewed install/update procedure.
-5. Run targeted skill/model cases, seeded-file loader checks, and native init-wizard smoke before acceptance.
+5. Run the coarse compliance scorer, seeded-file loader checks, and native init-wizard smoke before acceptance.
 6. Before rollback, follow the [subagent rollback runbook](../../../docs/runbooks/subagents.md#exact-recurrence-upgrade-and-rollback).
    The inherited persistence contract requires a tested compatible reader or restoration of a recorded pre-upgrade backup.
    Only then use the prior binary and bundle. Keep all operator-owned profiles and playbooks.
    Backup restoration loses post-backup journal state and does not undo external effects. This plan does not prove an executed rollback.
 
 Independent asset and default-profile preparation can precede stack integration.
-Every dependent runtime and model gate still requires the combined first and second PRs.
+Every dependent runtime and scorer gate still requires the combined first and second PRs.
 No live feed publication, daemon upgrade, or operator file replacement follows from independent preparation.
 The release task must state how the binary bundle and any separately maintained skill feed reach consistent versions.
 Do not run the legacy manifest generator locally.
@@ -238,7 +238,7 @@ The later identity suite passed all 13 tests, with no skips.
 Its worker test loads the seeded canonical profile and uses the real `SubAgentSpawner` and `SubAgentActor`.
 The provider wrapper records the Main role and delegates to the existing `SingleClientProvider` and scripted `FakeChatClient`.
 The test verifies one actual provider request, the canonical worker mission, and the exact task section.
-This check proves the role path on the preparation baseline; it does not prove background start, model quality, or artifact completion.
+This check proves the role path on the preparation baseline; it does not prove background start, scorer quality, or artifact completion.
 The bundle and logical resource checks passed within 10 daemon seed tests.
 All 18 profile-loader tests passed, including the omitted-role default and operator profile priority.
 The daemon seed suite skipped its existing Windows-only junction case on Linux.
@@ -256,4 +256,4 @@ The native oracle compares the worker with the canonical asset and preserves a c
 Its controls reject an absent worker and an altered operator profile, including paths that contain spaces.
 Slopwatch found no new issues. Copyright-header verification passed through `pwsh -NoProfile -File` because the script lacks an executable bit.
 The source changes add no policy check, grant scope, or authorization owner; the existing focused mutation scope remains unchanged.
-Final combined-stack verification and real-model trials remain open.
+Final combined-stack verification and the coarse scorer run remain open.

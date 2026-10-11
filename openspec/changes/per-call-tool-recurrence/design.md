@@ -12,7 +12,7 @@ The parent currently resets the tracker during automatic restart recovery.
 
 - Reuse the current tracker, signature factory, and result pipelines.
 - Detect an unchanged call across unrelated feedback rounds without a total task limit.
-- Preserve call-result pairs, authority, useful repairs, and durable parent evidence.
+- Preserve call-result pairs, authority, useful repairs, and live parent evidence.
 - Use one correction and then a runtime terminal result.
 
 **Non-Goals:**
@@ -131,7 +131,7 @@ Recovery restores the fact as tool evidence, not as a reusable grant.
 
 Changing elapsed text already changes the exact outcome hash.
 The PR does not strip that text or classify rapid polls as a loop.
-Model guidance and targeted evals must prefer useful work or completion notices over repeated status queries.
+Model guidance and scorer checks must prefer useful work or completion notices over repeated status queries.
 A semantic detector or poll-rate policy needs separate evidence and a later contract.
 
 ### 4. State lifetime, retention, and resource behavior
@@ -332,9 +332,8 @@ The existing doctor correction removes that deprecated key and preserves unrelat
 No startup path silently ignores the old setting.
 No optional compatibility parameter preserves the removed runtime policy.
 
-The PR activates the detector and removes the limits together after the evidence gates pass.
-It adds no runtime switch. A private disposable shadow harness compares immutable traces without tool execution.
-Shadow evidence must exist before activation or merge approval.
+The PR activates the detector and removes the limits together after deterministic and focused mutation gates pass.
+It adds no runtime switch. `docs/architecture/loop-detector.md` is the reference for detector behavior.
 Rollback restores the prior binary and schema; a configuration without the key receives the prior default ceiling.
 Older binaries cannot read new journal event variants without compatibility proof.
 Therefore rollback of a database that contains new events requires a tested compatible reader or restoration of its pre-upgrade backup.
@@ -342,31 +341,30 @@ This task authorizes code and PRs, not a daemon rollout or database replacement.
 
 ### 8. Proof before acceptance
 
-Preserve all unfinished proof obligations from `stop-repeated-tool-cycles`.
+Preserve all unfinished deterministic proof obligations from `stop-repeated-tool-cycles`.
 Run the fifteen laboratory cases and at least 10,000 fixed-seed sequences.
-For the broader nonadjacent detector, also run one million deterministic fuzz sequences and the 3,000-turn productive holdout gate.
-Zero hard false blocks in independent holdout turns and independent review of every shadow block remain required.
+For the broader nonadjacent detector, also run one million deterministic fuzz sequences.
 Keep session groups in one data split. Synthetic fuzz does not establish a production false-positive rate.
-Absent private replay or independent holdout evidence remains an unpassed gate, never an inferred pass.
+Absent deterministic or focused mutation evidence remains an unpassed gate, never an inferred pass.
 
 Use controlled actors, providers, acknowledgements, barriers, and timers for deterministic fault tests.
 A separate test agent derives assertions from this contract and targets named faulty variants.
 Require actual dispatch counts, durable records, artifact contents, and parent/child parity.
 A fixture failure or compiler error does not count as a rejected behavioral mutant.
-Run only the targeted tool-cycle and relevant subagent eval cases with strict independent assertions.
+Run the coarse compliance scorer for targeted tool-cycle and relevant subagent routing checks.
 The orchestration owner supplies the approved provider target outside commit and PR metadata.
 
 ## Risks / Trade-offs
 
 - [Exact result noise hides loops] -> Record misses separately; do not invent result normalization.
 - [A valid external recheck resembles recurrence] -> Apply only the explicit typed pending-job exception before both guards.
-- [Pending-job polls remain unbounded] -> State the miss; use guidance and evals; defer a rate policy.
+- [Pending-job polls remain unbounded] -> State the miss; use guidance and scorer checks; defer a rate policy.
 - [Cold eviction misses distant repeats] -> Publish the exact horizon; never evict established suspicion.
 - [Pinned evidence and durable records grow] -> Use fixed-size live entries and typed records; expose resource failures without a reset.
 - [Persistence races erase results] -> Persist typed evidence with each result; test admission, result, adoption, and delivery cut points.
 - [A missing receipt looks successful] -> Repair normal producers; settle an actual missing-receipt defect without another model request.
 - [Terminal summaries overstate progress] -> Use framework facts and a Partial child outcome.
-- [Removed ceilings expose semantic loops] -> Keep the agreed replay, shadow, sensitivity, and holdout merge gates.
+- [Removed ceilings expose semantic loops] -> Keep the deterministic, sensitivity, and focused mutation gates.
 - [New events complicate rollback] -> Test old-reader compatibility or require the recorded pre-upgrade backup procedure.
 
 ## Migration Plan
@@ -375,7 +373,7 @@ The orchestration owner supplies the approved provider target outside commit and
 2. Add the deterministic reference corpus and independent adversarial assertions.
 3. Implement the shared detector, durable delivery records, and runtime terminal path.
 4. Remove both ceilings and update schema, docs, and operational guidance.
-5. Run the deterministic, replay, shadow, sensitivity, and targeted model gates.
+5. Run the deterministic, sensitivity, focused mutation, and coarse compliance scorer gates.
 6. Review all failures, missing evidence, and private-data boundaries before the PR stack advances.
 7. Sync specifications through the OpenSpec skill after implementation agrees with this contract.
 

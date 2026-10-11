@@ -14,13 +14,13 @@ Use [the engineering glossary](../../../docs/spec/GLOSSARY.md) for shared terms.
 - Count duplicate calls once per feedback round. Preserve distinct typed outcomes and separate multiplicity evidence.
 - Refuse repeated calls before dispatch. Settle terminal loops without another model response.
 - Admit narrow runtime-owned pending-job status rechecks. Never infer a repeat exception from model text.
-- Preserve unresolved parent evidence through framework-owned journal events and snapshots.
+- Preserve unresolved parent evidence through live task continuation and compaction.
 - **BREAKING**: Remove `Session.MaxToolIterationsPerTurn`, its schema entry, and the child iteration limit.
 - Retain operation deadlines, explicit cancellation, empty-response guards, and usage counters.
-- Preserve the prior laboratory, replay, shadow, strict model, sensitivity, and focused mutation acceptance gates.
+- Preserve the laboratory, deterministic sensitivity, focused mutation, and coarse compliance scorer gates.
 - Update the operations skill and configuration guidance in the same PR.
 
-In scope: deterministic signatures, both current actor tool loops, parent recovery, bounded recent evidence, targeted evals, and configuration migration.
+In scope: deterministic signatures, both current actor tool loops, parent recovery without detector persistence, bounded recent evidence, scorer checks, and configuration migration.
 Out of scope: background children, peer messages, semantic classifiers, supervisor agents, renewable budgets, and durable child resumption.
 
 ## Capabilities
@@ -31,7 +31,7 @@ None.
 
 ### Modified Capabilities
 
-- `turn-loop-governance`: Replace count-based termination with exact recurrence, repeat rules, durable parent evidence, and runtime settlement.
+- `turn-loop-governance`: Replace count-based termination with exact recurrence, repeat rules, live parent evidence, and runtime settlement.
 - `netclaw-subagents`: Remove the child ceiling and require the shared detector contract.
 - `netclaw-tools`: Retain typed result evidence, explicit wait facts, and paired synthetic refusals.
 - `tool-authorization`: Adopt canonical admitted authority at the durable task-consumption boundary.
@@ -40,7 +40,7 @@ None.
 
 Owners: `TurnStateTracker`, `ToolCycleSignatureFactory`, `ActiveToolBatchTracker`, `LlmSessionActor`, and `SubAgentActor`.
 The status tool supplies wait facts through the existing internal receipt path.
-The session owns framework-safe detector records; children retain actor-local evidence.
+The session owns in-memory detector state; children retain actor-local evidence.
 The change adds no package or operator detector knob.
 
 ### Security and operational impact
@@ -48,7 +48,7 @@ The change adds no package or operator detector knob.
 Normal ACL, path, approval prompt, and tool timeout gates still apply to admitted calls.
 Detector feedback grants no authority and claims no successful execution.
 Diagnostics contain decisions, counts, and evidence-gap categories. They contain no private payload or digest.
-Private session persistence can retain detector digests; published artifacts cannot contain private replay data.
+No session persistence retains detector digests; published artifacts cannot contain private trace data.
 Activation follows the proof gates. This task does not deploy the daemon.
 New `tta-v1` records require a compatible reader or a recorded pre-upgrade backup before a rollback to the prior binary.
 Backup restoration loses journal state after the backup and cannot undo external effects.

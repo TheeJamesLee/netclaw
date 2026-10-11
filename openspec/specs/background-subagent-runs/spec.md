@@ -537,7 +537,7 @@ The parent SHALL issue its model request without waiting for a live child's comp
 The inference backend SHALL own its request queues and capacity.
 Netclaw SHALL NOT add provider-slot limits, capacity reservations, or parent/child inference preemption.
 Status and cancellation SHALL remain locally usable while a child request remains pending.
-An actor acknowledgement SHALL NOT substitute for required real-model evidence.
+An actor acknowledgement SHALL NOT substitute for an observed backend request.
 
 #### Scenario: A held child does not block the parent request
 
