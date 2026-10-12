@@ -198,10 +198,11 @@ internal sealed class ManagedPluginStateStore
 
     public Task<bool> UpdateLastObservedCommitAsync(
         string sourceId,
+        string sourceFingerprint,
         string commit,
         CancellationToken cancellationToken)
         => UpdateLastObservedCommitCoreAsync(
-            sourceId, sourceFingerprint: null, commit, clearRejection: false, cancellationToken);
+            sourceId, sourceFingerprint, commit, clearRejection: false, cancellationToken);
 
     public Task<bool> UpdateLastObservedCommitAfterRetryAsync(
         string sourceId,
@@ -213,7 +214,7 @@ internal sealed class ManagedPluginStateStore
 
     private async Task<bool> UpdateLastObservedCommitCoreAsync(
         string sourceId,
-        string? sourceFingerprint,
+        string sourceFingerprint,
         string commit,
         bool clearRejection,
         CancellationToken cancellationToken)
@@ -226,15 +227,16 @@ internal sealed class ManagedPluginStateStore
             """
             UPDATE managed_plugin_receipts
             SET last_observed_commit = $commit
-            WHERE source_id = $source;
+            WHERE source_id = $source AND source_fingerprint = $fingerprint;
             """;
         command.Parameters.AddWithValue("$source", sourceId);
+        command.Parameters.AddWithValue("$fingerprint", sourceFingerprint);
         command.Parameters.AddWithValue("$commit", commit);
         var updated = await command.ExecuteNonQueryAsync(cancellationToken) > 0;
         if (updated && clearRejection)
         {
             await DeleteRejectionAsync(
-                connection, transaction, sourceId, sourceFingerprint!, commit, cancellationToken);
+                connection, transaction, sourceId, sourceFingerprint, commit, cancellationToken);
         }
         await transaction.CommitAsync(cancellationToken);
         return updated;
