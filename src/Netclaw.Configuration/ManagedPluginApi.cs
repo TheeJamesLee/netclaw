@@ -4,11 +4,14 @@
 // </copyright>
 // -----------------------------------------------------------------------
 
+using System.Text.Json.Serialization;
+
 namespace Netclaw.Configuration;
 
 /// <summary>Wire contracts for managed plugin operations.</summary>
 public static class ManagedPluginApi
 {
+    [JsonConverter(typeof(JsonStringEnumConverter))]
     public enum InstallReferenceKind
     {
         DefaultBranch,
@@ -17,6 +20,7 @@ public static class ManagedPluginApi
         Commit,
     }
 
+    [JsonConverter(typeof(JsonStringEnumConverter))]
     public enum PluginStatus
     {
         Disabled,

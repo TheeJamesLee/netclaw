@@ -60,7 +60,7 @@ public sealed class ManagedPluginStateStoreTests : IDisposable
     }
 
     [Fact]
-    public async Task Last_observed_commit_changes_without_replacing_the_installed_commit()
+    public async Task Last_observed_commit_requires_the_matching_source_fingerprint()
     {
         var paths = _paths;
         var time = new FakeTimeProvider(new DateTimeOffset(2026, 9, 11, 12, 0, 0, TimeSpan.Zero));
@@ -68,13 +68,23 @@ public sealed class ManagedPluginStateStoreTests : IDisposable
             .MigrateAsync(paths.SqliteDbPath, TestContext.Current.CancellationToken);
         var store = new ManagedPluginStateStore(paths, time);
         var source = Source();
+        var fingerprint = ManagedPluginSourceValidator.Fingerprint(source);
         await store.SaveReceiptAsync(source, Candidate(Commit, "1.0.0"), TestContext.Current.CancellationToken);
         var installed = await store.GetReceiptAsync(source.Id, TestContext.Current.CancellationToken);
         Assert.NotNull(installed);
 
+        var changedSource = Source();
+        changedSource.Subdirectory = "plugin";
+        var changedFingerprint = ManagedPluginSourceValidator.Fingerprint(changedSource);
+        Assert.False(await store.UpdateLastObservedCommitAsync(
+            source.Id, changedFingerprint, LaterCommit, TestContext.Current.CancellationToken));
+        var unchanged = await store.GetReceiptAsync(source.Id, TestContext.Current.CancellationToken);
+        Assert.NotNull(unchanged);
+        Assert.Equal(Commit, unchanged.LastObservedCommit);
+
         time.Advance(TimeSpan.FromHours(1));
         Assert.True(await store.UpdateLastObservedCommitAsync(
-            source.Id, LaterCommit, TestContext.Current.CancellationToken));
+            source.Id, fingerprint, LaterCommit, TestContext.Current.CancellationToken));
 
         var observed = await store.GetReceiptAsync(source.Id, TestContext.Current.CancellationToken);
         Assert.NotNull(observed);
@@ -82,7 +92,7 @@ public sealed class ManagedPluginStateStoreTests : IDisposable
         Assert.Equal(LaterCommit, observed.LastObservedCommit);
         Assert.Equal(installed.InstalledAt, observed.InstalledAt);
         Assert.False(await store.UpdateLastObservedCommitAsync(
-            "missing", LaterCommit, TestContext.Current.CancellationToken));
+            "missing", fingerprint, LaterCommit, TestContext.Current.CancellationToken));
     }
 
     [Fact]

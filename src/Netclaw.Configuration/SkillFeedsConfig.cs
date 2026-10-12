@@ -3,6 +3,8 @@
 //      Copyright (C) 2026 - 2026 Petabridge, LLC <https://petabridge.com>
 // </copyright>
 // -----------------------------------------------------------------------
+using System.Text.Json.Serialization;
+
 namespace Netclaw.Configuration;
 
 /// <summary>
@@ -31,6 +33,7 @@ public sealed class SkillFeedsConfig
 }
 
 /// <summary>The type of Git reference that a managed plugin follows.</summary>
+[JsonConverter(typeof(JsonStringEnumConverter))]
 public enum ManagedPluginReferenceKind
 {
     Branch,
