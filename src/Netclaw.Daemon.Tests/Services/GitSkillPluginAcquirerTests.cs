@@ -243,13 +243,17 @@ public sealed class GitSkillPluginAcquirerTests : IDisposable
         var archive = CreateArchive(
             ("repo/plugin.json", AgentManifest("portable.plugin", "1.0.0"), TarEntryType.RegularFile),
             ("repo/skills/alpha/SKILL.md", Skill("alpha"), TarEntryType.RegularFile),
-            ("repo/skills/invalid/SKILL.md", "# Missing frontmatter", TarEntryType.RegularFile));
+            ("repo/skills/invalid/SKILL.md", "# Missing frontmatter", TarEntryType.RegularFile),
+            ("repo/skills/invalid/references/leak.md", "must not publish", TarEntryType.RegularFile));
 
         var candidate = await CreateAcquirer(archive).AcquireAsync(
             Source(ManagedPluginSourceValidator.AgentPluginFormat),
             TestContext.Current.CancellationToken);
 
         Assert.Equal("alpha", Assert.Single(candidate.Skills).Name);
+        Assert.True(File.Exists(Path.Combine(candidate.Directory, "alpha", "SKILL.md")));
+        Assert.False(Directory.Exists(Path.Combine(candidate.Directory, "invalid")));
+        Assert.False(File.Exists(Path.Combine(candidate.Directory, "invalid", "references", "leak.md")));
         Assert.NotEmpty(candidate.Notices);
     }
 
@@ -503,6 +507,22 @@ public sealed class GitSkillPluginAcquirerTests : IDisposable
     }
 
     [Fact]
+    public async Task Acquire_rejects_invalid_UTF8_in_a_skill_resource()
+    {
+        var resourceBytes = Encoding.UTF8.GetBytes("resource").Concat([byte.MaxValue]).ToArray();
+        var archive = CreateBinaryArchive(
+            ("repo/.codex-plugin/plugin.json", Encoding.UTF8.GetBytes(Manifest("1.0.0")), TarEntryType.RegularFile),
+            ("repo/skills/alpha/SKILL.md", Encoding.UTF8.GetBytes(Skill("alpha")), TarEntryType.RegularFile),
+            ("repo/skills/alpha/references/binary.md", resourceBytes, TarEntryType.RegularFile));
+
+        var error = await Assert.ThrowsAsync<GitSkillPluginRejectedException>(() =>
+            CreateAcquirer(archive).AcquireAsync(Source(), TestContext.Current.CancellationToken));
+
+        Assert.Contains("alpha:references/binary.md", error.Message);
+        Assert.Contains("not valid UTF-8", error.Message);
+    }
+
+    [Fact]
     public async Task Acquire_rejects_a_skill_file_with_noncanonical_case()
     {
         var archive = CreateArchive(
@@ -672,9 +692,8 @@ public sealed class GitSkillPluginAcquirerTests : IDisposable
         ISkillContentScanner? scanner = null,
         GitSkillPluginArchiveLimits? limits = null)
     {
-        var client = new HttpClient(handler);
         return new GitSkillPluginAcquirer(
-            client,
+            handler,
             new NetclawPaths(_temp.Path),
             TimeProvider.System,
             scanner ?? new NoOpSkillContentScanner(),

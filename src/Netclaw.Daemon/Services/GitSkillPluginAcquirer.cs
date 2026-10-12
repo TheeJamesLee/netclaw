@@ -85,23 +85,23 @@ internal sealed class GitSkillPluginAcquirer : IGitSkillPluginAcquirer
     private readonly ISkillContentScanner _scanner;
     private readonly GitSkillPluginArchiveLimits _limits;
 
+    // This constructor owns CreateHttpHandler() so redirect validation remains authoritative.
     public GitSkillPluginAcquirer(
-        HttpClient httpClient,
         NetclawPaths paths,
         TimeProvider timeProvider,
         ISkillContentScanner scanner)
-        : this(httpClient, paths, timeProvider, scanner, GitSkillPluginArchiveLimits.Default)
+        : this(CreateHttpHandler(), paths, timeProvider, scanner, GitSkillPluginArchiveLimits.Default)
     {
     }
 
     internal GitSkillPluginAcquirer(
-        HttpClient httpClient,
+        HttpMessageHandler httpHandler,
         NetclawPaths paths,
         TimeProvider timeProvider,
         ISkillContentScanner scanner,
         GitSkillPluginArchiveLimits limits)
     {
-        _httpClient = httpClient;
+        _httpClient = new HttpClient(httpHandler, disposeHandler: false);
         _paths = paths;
         _timeProvider = timeProvider;
         _scanner = scanner;
@@ -173,6 +173,8 @@ internal sealed class GitSkillPluginAcquirer : IGitSkillPluginAcquirer
                             ?? "One or more selected skill folders were invalid.");
                     }
 
+                    RemoveSkippedSkillRoots(stagingDirectory, inventory, scan);
+
                     foreach (var skill in scan.AcceptedSkills)
                     {
                         if (skill.HasSubagentRoutingMetadata)
@@ -219,7 +221,9 @@ internal sealed class GitSkillPluginAcquirer : IGitSkillPluginAcquirer
                             }
                             catch (DecoderFallbackException)
                             {
-                                continue;
+                                throw new GitSkillPluginRejectedException(
+                                    commit,
+                                    $"Resource '{skill.Name}:{resourcePath}' is not valid UTF-8.");
                             }
 
                             var resourceVerdict = await ScanContentAsync(
@@ -253,7 +257,7 @@ internal sealed class GitSkillPluginAcquirer : IGitSkillPluginAcquirer
 
                     var publishedScan = SkillScanner.Scan(candidateDirectory, false, false, false);
                     if (publishedScan.AcceptedSkills.Count != scan.AcceptedSkills.Count
-                        || (!inventory.SkipInvalidSkills && publishedScan.Issues.Count > 0))
+                        || publishedScan.Issues.Count > 0)
                     {
                         throw new InvalidDataException("The immutable candidate did not match its validated snapshot.");
                     }
@@ -326,6 +330,29 @@ internal sealed class GitSkillPluginAcquirer : IGitSkillPluginAcquirer
         => issue.SkillName is { Length: > 0 } name
             ? $"Skill '{name}' was skipped because of {issue.Kind}."
             : $"A skill was skipped because of {issue.Kind}.";
+
+    private static void RemoveSkippedSkillRoots(
+        string stagingDirectory,
+        ArchiveInventory inventory,
+        Netclaw.Actors.Skills.SkillScanResult scan)
+    {
+        if (!inventory.SkipInvalidSkills)
+            return;
+
+        var acceptedDirectories = scan.AcceptedSkills
+            .Select(static skill => NormalizeDirectoryPath(skill.SkillDirectory))
+            .ToHashSet(StringComparer.Ordinal);
+        foreach (var root in inventory.SkillRoots)
+        {
+            var skillName = Path.GetFileName(root.TrimEnd('/'));
+            var skillDirectory = NormalizeDirectoryPath(Path.Combine(stagingDirectory, skillName));
+            if (!acceptedDirectories.Contains(skillDirectory))
+                DeleteDirectory(skillDirectory);
+        }
+    }
+
+    private static string NormalizeDirectoryPath(string path)
+        => Path.TrimEndingDirectorySeparator(Path.GetFullPath(path));
 
     public async Task<string> ResolveDefaultBranchAsync(
         string repository,
