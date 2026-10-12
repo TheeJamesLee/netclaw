@@ -480,7 +480,6 @@ public sealed class SkillEndpointRouteBuilderExtensionsTests : IDisposable
 
     private static IGitSkillPluginAcquirer CreatePluginAcquirer(NetclawPaths paths)
         => new GitSkillPluginAcquirer(
-            new HttpClient(new HttpClientHandler()),
             paths,
             TimeProvider.System,
             new NoOpSkillContentScanner());
