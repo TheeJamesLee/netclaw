@@ -59,15 +59,15 @@ internal sealed class GitSkillPluginConfigStore(
         {
             var root = LoadRoot();
             var plugins = LoadPlugins(root);
-            if (plugins.Any(item => string.Equals(item.Id, source.Id, StringComparison.OrdinalIgnoreCase)))
+            if (plugins.Any(item => string.Equals(item.Id.Value, source.Id.Value, StringComparison.OrdinalIgnoreCase)))
             {
                 throw new GitSkillPluginConfigException(
                     GitSkillPluginConfigFailure.Conflict,
-                    $"Plugin '{source.Id}' already exists.");
+                    $"Plugin '{source.Id.Value}' already exists.");
             }
 
             plugins.Add(source);
-            return WritePlugins(root, plugins, source.Id);
+            return WritePlugins(root, plugins, source.Id.Value);
         }
     }
 
@@ -78,7 +78,7 @@ internal sealed class GitSkillPluginConfigStore(
             var root = LoadRoot();
             var plugins = LoadPlugins(root);
             var source = plugins.FirstOrDefault(
-                item => string.Equals(item.Id, name, StringComparison.OrdinalIgnoreCase));
+                item => string.Equals(item.Id.Value, name, StringComparison.OrdinalIgnoreCase));
             if (source is null)
             {
                 throw new GitSkillPluginConfigException(
@@ -90,7 +90,7 @@ internal sealed class GitSkillPluginConfigStore(
                 return new GitSkillPluginConfigMutation(false, restartSignal.Generation);
 
             source.Enabled = enabled;
-            return new GitSkillPluginConfigMutation(true, WritePlugins(root, plugins, source.Id));
+            return new GitSkillPluginConfigMutation(true, WritePlugins(root, plugins, source.Id.Value));
         }
     }
 
@@ -101,7 +101,7 @@ internal sealed class GitSkillPluginConfigStore(
             var root = LoadRoot();
             var plugins = LoadPlugins(root);
             var removed = plugins.RemoveAll(
-                item => string.Equals(item.Id, name, StringComparison.OrdinalIgnoreCase));
+                item => string.Equals(item.Id.Value, name, StringComparison.OrdinalIgnoreCase));
             if (removed == 0)
             {
                 throw new GitSkillPluginConfigException(

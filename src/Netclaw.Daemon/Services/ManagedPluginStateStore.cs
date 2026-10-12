@@ -174,7 +174,7 @@ internal sealed class ManagedPluginStateStore
                 installed_version = excluded.installed_version,
                 installed_at = excluded.installed_at;
             """;
-        command.Parameters.AddWithValue("$source", source.Id);
+        command.Parameters.AddWithValue("$source", source.Id.Value);
         command.Parameters.AddWithValue("$repository", source.Repository);
         command.Parameters.AddWithValue("$format", source.Format);
         command.Parameters.AddWithValue("$subdirectory", (object?)source.Subdirectory ?? DBNull.Value);
@@ -191,7 +191,7 @@ internal sealed class ManagedPluginStateStore
         if (clearRejection)
         {
             await DeleteRejectionAsync(
-                connection, transaction, source.Id, fingerprint, candidate.Commit, cancellationToken);
+                connection, transaction, source.Id.Value, fingerprint, candidate.Commit, cancellationToken);
         }
         await transaction.CommitAsync(cancellationToken);
     }

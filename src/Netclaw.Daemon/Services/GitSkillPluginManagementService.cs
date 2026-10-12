@@ -28,11 +28,11 @@ internal sealed class GitSkillPluginManagementService(
         ValidateInstallRequest(request);
 
         if (feedsConfig.Plugins.Any(
-                item => string.Equals(item.Id, id, StringComparison.OrdinalIgnoreCase)))
+                item => string.Equals(item.Id.Value, id.Value, StringComparison.OrdinalIgnoreCase)))
         {
             throw new GitSkillPluginConfigException(
                 GitSkillPluginConfigFailure.Conflict,
-                $"Plugin '{id}' already exists.");
+                $"Plugin '{id.Value}' already exists.");
         }
 
         if (feedsConfig.Plugins.Count >= ManagedPluginSourceValidator.MaximumSourceCount)
@@ -72,10 +72,10 @@ internal sealed class GitSkillPluginManagementService(
             .ToDictionary(receipt => receipt.SourceId, StringComparer.OrdinalIgnoreCase);
         var rows = feedsConfig.Plugins.Select(source =>
         {
-            receipts.TryGetValue(source.Id, out var receipt);
+            receipts.TryGetValue(source.Id.Value, out var receipt);
             var installedDirectoryExists = receipt is not null
                 && Directory.Exists(paths.ManagedGitSkillCommitDirectory(
-                    receipt.SourceId,
+                    ManagedPluginSourceId.Create(receipt.SourceId),
                     receipt.SourceFingerprint,
                     receipt.InstalledCommit));
             var status = !source.Enabled
@@ -109,7 +109,7 @@ internal sealed class GitSkillPluginManagementService(
 
     private async Task<ManagedPluginSource> ResolveSourceAsync(
         ManagedPluginApi.InstallRequest request,
-        string id,
+        ManagedPluginSourceId id,
         string repository,
         string? subdirectory,
         CancellationToken cancellationToken)
@@ -157,7 +157,7 @@ internal sealed class GitSkillPluginManagementService(
     }
 
     private static ManagedPluginSource NewSource(
-        string id,
+        ManagedPluginSourceId id,
         string repository,
         string format,
         string? subdirectory,
@@ -180,7 +180,7 @@ internal sealed class GitSkillPluginManagementService(
         ManagedPluginApi.PluginStatus status,
         ManagedPluginReceipt? receipt) => new()
         {
-            SourceId = source.Id,
+            SourceId = source.Id.Value,
             ManifestName = receipt?.ManifestName,
             Repository = source.Repository,
             SourceFormat = source.Format,
@@ -202,11 +202,13 @@ internal sealed class GitSkillPluginManagementService(
         return repository;
     }
 
-    private static string NormalizeId(string? value, string repository)
+    private static ManagedPluginSourceId NormalizeId(string? value, string repository)
     {
         var id = value ?? DeriveName(repository[(repository.IndexOf('/', StringComparison.Ordinal) + 1)..]);
-        ValidateId(id);
-        return id;
+        if (ManagedPluginSourceId.TryCreate(id, out var sourceId))
+            return sourceId;
+        ManagedPluginSourceValidator.TryValidateId(id, out var error);
+        throw new InvalidOperationException(error);
     }
 
     private static void ValidateId(string id)

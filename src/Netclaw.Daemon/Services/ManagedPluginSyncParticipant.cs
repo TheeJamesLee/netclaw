@@ -3,6 +3,8 @@
 //      Copyright (C) 2026 - 2026 Petabridge, LLC <https://petabridge.com>
 // </copyright>
 // -----------------------------------------------------------------------
+using System.Text.Json;
+using Microsoft.Data.Sqlite;
 using Microsoft.Extensions.Logging;
 using Netclaw.Actors.Skills;
 using Netclaw.Configuration;
@@ -54,7 +56,7 @@ internal sealed class ManagedPluginSyncParticipant(
         }
 
         await stateStore.RemoveSourcesExceptAsync(
-            configuredSources.Select(static source => source.Id).ToArray(),
+            configuredSources.Select(static source => source.Id.Value).ToArray(),
             cancellationToken);
         var receipts = await stateStore.LoadReceiptsAsync(cancellationToken);
         if (!_startupCleanupComplete)
@@ -64,9 +66,9 @@ internal sealed class ManagedPluginSyncParticipant(
         }
 
         foreach (var source in configuredSources.Where(source =>
-                     source.Enabled
-                     && (request.Scope != ServerFeedSkillSyncActor.SyncScope.Plugin
-                         || string.Equals(source.Id, request.PluginId, StringComparison.Ordinal))))
+                      source.Enabled
+                      && (request.Scope != ServerFeedSkillSyncActor.SyncScope.Plugin
+                          || string.Equals(source.Id.Value, request.PluginId, StringComparison.Ordinal))))
         {
             try
             {
@@ -76,13 +78,13 @@ internal sealed class ManagedPluginSyncParticipant(
             {
                 throw;
             }
-            catch (Exception ex)
+            catch (Exception ex) when (IsExpectedSourceSyncFailure(ex))
             {
                 logger.LogWarning(
                     ex,
                     "Managed plugin sync failed for '{PluginId}' and kept the prior publication",
-                    source.Id);
-                rows.Add(PluginFailure(source.Id));
+                    source.Id.Value);
+                rows.Add(PluginFailure(source.Id.Value));
             }
         }
 
@@ -103,14 +105,14 @@ internal sealed class ManagedPluginSyncParticipant(
             timeout.Token);
         var sourceToken = sourceOperation.Token;
         var sourceFingerprint = ManagedPluginSourceValidator.Fingerprint(source);
-        var receipt = await stateStore.GetReceiptAsync(source.Id, sourceToken);
+        var receipt = await stateStore.GetReceiptAsync(source.Id.Value, sourceToken);
         var commit = source.ReferenceKind == ManagedPluginReferenceKind.Commit
             ? source.Reference.ToLowerInvariant()
             : await acquirer.ResolveCommitAsync(source, sourceToken);
         var installedDirectory = receipt is null
             ? null
             : paths.ManagedGitSkillCommitDirectory(
-                receipt.SourceId,
+                ManagedPluginSourceId.Create(receipt.SourceId),
                 receipt.SourceFingerprint,
                 receipt.InstalledCommit);
 
@@ -120,11 +122,11 @@ internal sealed class ManagedPluginSyncParticipant(
             && (string.Equals(receipt.InstalledCommit, commit, StringComparison.Ordinal)
                 || string.Equals(receipt.LastObservedCommit, commit, StringComparison.Ordinal)))
         {
-            return PluginUnchanged(source.Id, receipt.InstalledCommit, receipt.InstalledVersion);
+            return PluginUnchanged(source.Id.Value, receipt.InstalledCommit, receipt.InstalledVersion);
         }
 
         var rejection = await stateStore.GetRejectionAsync(
-            source.Id,
+            source.Id.Value,
             sourceFingerprint,
             commit,
             sourceToken);
@@ -133,7 +135,7 @@ internal sealed class ManagedPluginSyncParticipant(
             if (rejection.SecurityRejection
                 && !rejection.AlertEmitted
                 && await stateStore.TryClaimSecurityAlertAsync(
-                    source.Id,
+                    source.Id.Value,
                     sourceFingerprint,
                     commit,
                     sourceToken))
@@ -143,9 +145,9 @@ internal sealed class ManagedPluginSyncParticipant(
 
             logger.LogInformation(
                 "Managed plugin '{PluginId}' commit {Commit} remains rejected",
-                source.Id,
+                source.Id.Value,
                 commit);
-            return PluginRejected(source.Id, commit);
+            return PluginRejected(source.Id.Value, commit);
         }
 
         try
@@ -163,7 +165,7 @@ internal sealed class ManagedPluginSyncParticipant(
                 if (rejection is null)
                 {
                     await stateStore.UpdateLastObservedCommitAsync(
-                        source.Id,
+                        source.Id.Value,
                         sourceFingerprint,
                         candidate.Commit,
                         sourceToken);
@@ -171,13 +173,13 @@ internal sealed class ManagedPluginSyncParticipant(
                 else
                 {
                     await stateStore.UpdateLastObservedCommitAfterRetryAsync(
-                        source.Id,
+                        source.Id.Value,
                         sourceFingerprint,
                         candidate.Commit,
                         sourceToken);
                 }
                 DeleteUnpublishedCandidate(candidate.Directory, installedDirectory);
-                return PluginUnchanged(source.Id, receipt.InstalledCommit, receipt.InstalledVersion);
+                return PluginUnchanged(source.Id.Value, receipt.InstalledCommit, receipt.InstalledVersion);
             }
 
             if (rejection is null)
@@ -187,7 +189,7 @@ internal sealed class ManagedPluginSyncParticipant(
 
             return new SkillSyncResult.SourceRow
             {
-                Name = source.Id,
+                Name = source.Id.Value,
                 SourceKind = SkillSyncResult.GitPluginSourceKind,
                 ChangedCount = 1,
                 Sidecar = "not-applicable",
@@ -199,7 +201,7 @@ internal sealed class ManagedPluginSyncParticipant(
         catch (GitSkillPluginRejectedException exception)
         {
             await stateStore.SaveRejectionAsync(
-                source.Id,
+                source.Id.Value,
                 sourceFingerprint,
                 exception.Commit,
                 exception.Message,
@@ -208,7 +210,7 @@ internal sealed class ManagedPluginSyncParticipant(
 
             if (exception.SecurityRejection
                 && await stateStore.TryClaimSecurityAlertAsync(
-                    source.Id,
+                    source.Id.Value,
                     sourceFingerprint,
                     exception.Commit,
                     sourceToken))
@@ -218,9 +220,9 @@ internal sealed class ManagedPluginSyncParticipant(
 
             logger.LogWarning(
                 "Managed plugin '{PluginId}' commit {Commit} was rejected",
-                source.Id,
+                source.Id.Value,
                 exception.Commit);
-            return PluginRejected(source.Id, exception.Commit);
+            return PluginRejected(source.Id.Value, exception.Commit);
         }
     }
 
@@ -228,12 +230,12 @@ internal sealed class ManagedPluginSyncParticipant(
         IReadOnlyList<ManagedPluginReceipt> receipts)
         => receipts
             .Where(receipt => feedsConfig.Plugins.Any(source => source.Enabled
-                && string.Equals(source.Id, receipt.SourceId, StringComparison.Ordinal)))
+                && string.Equals(source.Id.Value, receipt.SourceId, StringComparison.Ordinal)))
             .Select(receipt => new
             {
                 Receipt = receipt,
                 Directory = paths.ManagedGitSkillCommitDirectory(
-                    receipt.SourceId,
+                    ManagedPluginSourceId.Create(receipt.SourceId),
                     receipt.SourceFingerprint,
                     receipt.InstalledCommit),
             })
@@ -265,7 +267,7 @@ internal sealed class ManagedPluginSyncParticipant(
     {
         var selectedDirectories = receipts
             .Select(receipt => Path.GetFullPath(paths.ManagedGitSkillCommitDirectory(
-                receipt.SourceId,
+                ManagedPluginSourceId.Create(receipt.SourceId),
                 receipt.SourceFingerprint,
                 receipt.InstalledCommit)))
             .ToHashSet(StringComparer.Ordinal);
@@ -281,7 +283,7 @@ internal sealed class ManagedPluginSyncParticipant(
                 {
                     CleanupSourceDirectory(sourceDirectory, selectedDirectories);
                 }
-                catch (Exception ex)
+                catch (Exception ex) when (IsExpectedCleanupFailure(ex))
                 {
                     logger.LogWarning(
                         ex,
@@ -290,7 +292,7 @@ internal sealed class ManagedPluginSyncParticipant(
                 }
             }
         }
-        catch (Exception ex)
+        catch (Exception ex) when (IsExpectedCleanupFailure(ex))
         {
             logger.LogWarning(ex, "Managed plugin cleanup could not enumerate {Directory}", root);
         }
@@ -320,11 +322,23 @@ internal sealed class ManagedPluginSyncParticipant(
         {
             GitSkillPluginAcquirer.DeleteDirectory(directory);
         }
-        catch (Exception ex)
+        catch (Exception ex) when (IsExpectedCleanupFailure(ex))
         {
             logger.LogWarning(ex, "Managed plugin cleanup failed for directory {Directory}", directory);
         }
     }
+
+    private static bool IsExpectedSourceSyncFailure(Exception exception)
+        => exception is GitSkillPluginScannerUnavailableException
+            or HttpRequestException
+            or SqliteException
+            or IOException
+            or JsonException
+            or InvalidDataException
+            or OperationCanceledException;
+
+    private static bool IsExpectedCleanupFailure(Exception exception)
+        => exception is IOException or UnauthorizedAccessException;
 
     private static void DeleteUnpublishedCandidate(string candidateDirectory, string installedDirectory)
     {

@@ -705,7 +705,7 @@ public sealed class GitSkillPluginAcquirerTests : IDisposable
     private static ManagedPluginSource Source(
         string format = ManagedPluginSourceValidator.CodexFormat) => new()
     {
-        Id = "fixture",
+        Id = ManagedPluginSourceId.Create("fixture"),
         Repository = "owner/repository",
         Format = format,
         ReferenceKind = ManagedPluginReferenceKind.Branch,

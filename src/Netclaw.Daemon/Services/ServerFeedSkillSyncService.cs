@@ -79,7 +79,7 @@ internal sealed class ServerFeedSkillSyncService : IServerFeedSkillSyncRunner
             scanner,
             logger,
             CreateSkillServerClient,
-            new ManagedPluginSyncParticipant(
+            CreatePluginParticipant(
                 feedsConfig,
                 paths,
                 timeProvider,
@@ -116,7 +116,7 @@ internal sealed class ServerFeedSkillSyncService : IServerFeedSkillSyncRunner
             scanner,
             logger,
             clientFactory,
-            new ManagedPluginSyncParticipant(
+            CreatePluginParticipant(
                 feedsConfig,
                 paths,
                 timeProvider,
@@ -146,6 +146,23 @@ internal sealed class ServerFeedSkillSyncService : IServerFeedSkillSyncRunner
         _clientFactory = clientFactory;
         _pluginSyncParticipant = pluginSyncParticipant;
     }
+
+    private static ManagedPluginSyncParticipant CreatePluginParticipant(
+        SkillFeedsConfig feedsConfig,
+        NetclawPaths paths,
+        TimeProvider timeProvider,
+        ManagedPluginStateStore pluginStateStore,
+        IGitSkillPluginAcquirer pluginAcquirer,
+        IOperationalNotificationSink notificationSink,
+        ILogger logger)
+        => new(
+            feedsConfig,
+            paths,
+            timeProvider,
+            pluginStateStore,
+            pluginAcquirer,
+            notificationSink,
+            logger);
 
     /// <summary>
     /// Runs one complete synchronization pass.

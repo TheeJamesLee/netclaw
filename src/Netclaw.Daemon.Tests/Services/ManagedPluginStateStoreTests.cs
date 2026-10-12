@@ -40,10 +40,10 @@ public sealed class ManagedPluginStateStoreTests : IDisposable
         var fingerprint = ManagedPluginSourceValidator.Fingerprint(source);
 
         Assert.True(await store.SaveRejectionAsync(
-            source.Id, fingerprint, Commit, "bad content", true,
+            source.Id.Value, fingerprint, Commit, "bad content", true,
             TestContext.Current.CancellationToken));
         Assert.Null(await store.GetRejectionAsync(
-            source.Id, new string('a', 64), Commit,
+            source.Id.Value, new string('a', 64), Commit,
             TestContext.Current.CancellationToken));
 
         await store.SaveReceiptAsync(source, Candidate(Commit, "1.0.0"), TestContext.Current.CancellationToken);
@@ -56,7 +56,7 @@ public sealed class ManagedPluginStateStoreTests : IDisposable
         Assert.Equal(ManagedPluginSourceValidator.CodexFormat, receipt.ManifestFormat);
         Assert.Equal(ManagedPluginSourceValidator.CodexFormat, receipt.SourceFormat);
         Assert.NotNull(await store.GetRejectionAsync(
-            source.Id, fingerprint, Commit, TestContext.Current.CancellationToken));
+            source.Id.Value, fingerprint, Commit, TestContext.Current.CancellationToken));
     }
 
     [Fact]
@@ -70,23 +70,23 @@ public sealed class ManagedPluginStateStoreTests : IDisposable
         var source = Source();
         var fingerprint = ManagedPluginSourceValidator.Fingerprint(source);
         await store.SaveReceiptAsync(source, Candidate(Commit, "1.0.0"), TestContext.Current.CancellationToken);
-        var installed = await store.GetReceiptAsync(source.Id, TestContext.Current.CancellationToken);
+        var installed = await store.GetReceiptAsync(source.Id.Value, TestContext.Current.CancellationToken);
         Assert.NotNull(installed);
 
         var changedSource = Source();
         changedSource.Subdirectory = "plugin";
         var changedFingerprint = ManagedPluginSourceValidator.Fingerprint(changedSource);
         Assert.False(await store.UpdateLastObservedCommitAsync(
-            source.Id, changedFingerprint, LaterCommit, TestContext.Current.CancellationToken));
-        var unchanged = await store.GetReceiptAsync(source.Id, TestContext.Current.CancellationToken);
+            source.Id.Value, changedFingerprint, LaterCommit, TestContext.Current.CancellationToken));
+        var unchanged = await store.GetReceiptAsync(source.Id.Value, TestContext.Current.CancellationToken);
         Assert.NotNull(unchanged);
         Assert.Equal(Commit, unchanged.LastObservedCommit);
 
         time.Advance(TimeSpan.FromHours(1));
         Assert.True(await store.UpdateLastObservedCommitAsync(
-            source.Id, fingerprint, LaterCommit, TestContext.Current.CancellationToken));
+            source.Id.Value, fingerprint, LaterCommit, TestContext.Current.CancellationToken));
 
-        var observed = await store.GetReceiptAsync(source.Id, TestContext.Current.CancellationToken);
+        var observed = await store.GetReceiptAsync(source.Id.Value, TestContext.Current.CancellationToken);
         Assert.NotNull(observed);
         Assert.Equal(Commit, observed.InstalledCommit);
         Assert.Equal(LaterCommit, observed.LastObservedCommit);
@@ -105,13 +105,13 @@ public sealed class ManagedPluginStateStoreTests : IDisposable
         var source = Source();
         var fingerprint = ManagedPluginSourceValidator.Fingerprint(source);
         await store.SaveRejectionAsync(
-            source.Id, fingerprint, Commit, "bad content", false,
+            source.Id.Value, fingerprint, Commit, "bad content", false,
             TestContext.Current.CancellationToken);
 
         await store.RemoveSourcesExceptAsync([], TestContext.Current.CancellationToken);
 
         Assert.Null(await store.GetRejectionAsync(
-            source.Id, fingerprint, Commit, TestContext.Current.CancellationToken));
+            source.Id.Value, fingerprint, Commit, TestContext.Current.CancellationToken));
     }
 
     [Fact]
@@ -126,10 +126,10 @@ public sealed class ManagedPluginStateStoreTests : IDisposable
         var reason = "bad\r\n" + new string('x', ManagedPluginStateStore.MaximumRejectionReasonLength + 100);
 
         await store.SaveRejectionAsync(
-            source.Id, fingerprint, Commit, reason, true, TestContext.Current.CancellationToken);
+            source.Id.Value, fingerprint, Commit, reason, true, TestContext.Current.CancellationToken);
 
         var rejection = await store.GetRejectionAsync(
-            source.Id, fingerprint, Commit, TestContext.Current.CancellationToken);
+            source.Id.Value, fingerprint, Commit, TestContext.Current.CancellationToken);
         Assert.NotNull(rejection);
         Assert.Equal(ManagedPluginStateStore.MaximumRejectionReasonLength, rejection.Reason.Length);
         Assert.DoesNotContain('\r', rejection.Reason);
@@ -146,15 +146,15 @@ public sealed class ManagedPluginStateStoreTests : IDisposable
         var source = Source();
         var fingerprint = ManagedPluginSourceValidator.Fingerprint(source);
         await store.SaveRejectionAsync(
-            source.Id, fingerprint, Commit, "invalid metadata", false,
+            source.Id.Value, fingerprint, Commit, "invalid metadata", false,
             TestContext.Current.CancellationToken);
 
         await store.SaveRejectionAsync(
-            source.Id, fingerprint, Commit, "security rejection", true,
+            source.Id.Value, fingerprint, Commit, "security rejection", true,
             TestContext.Current.CancellationToken);
 
         var rejection = await store.GetRejectionAsync(
-            source.Id, fingerprint, Commit, TestContext.Current.CancellationToken);
+            source.Id.Value, fingerprint, Commit, TestContext.Current.CancellationToken);
         Assert.NotNull(rejection);
         Assert.True(rejection.SecurityRejection);
         Assert.Equal("security rejection", rejection.Reason);
@@ -170,22 +170,22 @@ public sealed class ManagedPluginStateStoreTests : IDisposable
         var source = Source();
         var fingerprint = ManagedPluginSourceValidator.Fingerprint(source);
         await store.SaveRejectionAsync(
-            source.Id, fingerprint, Commit, "invalid metadata", false,
+            source.Id.Value, fingerprint, Commit, "invalid metadata", false,
             TestContext.Current.CancellationToken);
 
         Assert.False(await store.TryClaimSecurityAlertAsync(
-            source.Id, fingerprint, Commit, TestContext.Current.CancellationToken));
+            source.Id.Value, fingerprint, Commit, TestContext.Current.CancellationToken));
 
         await store.SaveRejectionAsync(
-            source.Id, fingerprint, Commit, "security rejection", true,
+            source.Id.Value, fingerprint, Commit, "security rejection", true,
             TestContext.Current.CancellationToken);
         Assert.True(await store.TryClaimSecurityAlertAsync(
-            source.Id, fingerprint, Commit, TestContext.Current.CancellationToken));
+            source.Id.Value, fingerprint, Commit, TestContext.Current.CancellationToken));
         Assert.False(await store.TryClaimSecurityAlertAsync(
-            source.Id, fingerprint, Commit, TestContext.Current.CancellationToken));
+            source.Id.Value, fingerprint, Commit, TestContext.Current.CancellationToken));
 
         var rejection = await store.GetRejectionAsync(
-            source.Id, fingerprint, Commit, TestContext.Current.CancellationToken);
+            source.Id.Value, fingerprint, Commit, TestContext.Current.CancellationToken);
         Assert.NotNull(rejection);
         Assert.True(rejection.AlertEmitted);
     }
@@ -198,16 +198,16 @@ public sealed class ManagedPluginStateStoreTests : IDisposable
         var source = Source();
         var fingerprint = ManagedPluginSourceValidator.Fingerprint(source);
         await store.SaveRejectionAsync(
-            source.Id, fingerprint, Commit, "security rejection", true,
+            source.Id.Value, fingerprint, Commit, "security rejection", true,
             TestContext.Current.CancellationToken);
         await CreateRejectDeleteTriggerAsync();
 
         await Assert.ThrowsAsync<SqliteException>(() => store.SaveReceiptAfterRetryAsync(
             source, Candidate(Commit, "1.0.0"), TestContext.Current.CancellationToken));
 
-        Assert.Null(await store.GetReceiptAsync(source.Id, TestContext.Current.CancellationToken));
+        Assert.Null(await store.GetReceiptAsync(source.Id.Value, TestContext.Current.CancellationToken));
         Assert.NotNull(await store.GetRejectionAsync(
-            source.Id, fingerprint, Commit, TestContext.Current.CancellationToken));
+            source.Id.Value, fingerprint, Commit, TestContext.Current.CancellationToken));
     }
 
     [Fact]
@@ -219,18 +219,18 @@ public sealed class ManagedPluginStateStoreTests : IDisposable
         var fingerprint = ManagedPluginSourceValidator.Fingerprint(source);
         await store.SaveReceiptAsync(source, Candidate(Commit, "1.0.0"), TestContext.Current.CancellationToken);
         await store.SaveRejectionAsync(
-            source.Id, fingerprint, LaterCommit, "security rejection", true,
+            source.Id.Value, fingerprint, LaterCommit, "security rejection", true,
             TestContext.Current.CancellationToken);
         await CreateRejectDeleteTriggerAsync();
 
         await Assert.ThrowsAsync<SqliteException>(() => store.UpdateLastObservedCommitAfterRetryAsync(
-            source.Id, fingerprint, LaterCommit, TestContext.Current.CancellationToken));
+            source.Id.Value, fingerprint, LaterCommit, TestContext.Current.CancellationToken));
 
-        var receipt = await store.GetReceiptAsync(source.Id, TestContext.Current.CancellationToken);
+        var receipt = await store.GetReceiptAsync(source.Id.Value, TestContext.Current.CancellationToken);
         Assert.NotNull(receipt);
         Assert.Equal(Commit, receipt.LastObservedCommit);
         Assert.NotNull(await store.GetRejectionAsync(
-            source.Id, fingerprint, LaterCommit, TestContext.Current.CancellationToken));
+            source.Id.Value, fingerprint, LaterCommit, TestContext.Current.CancellationToken));
     }
 
     private async Task MigrateAsync()
@@ -259,7 +259,7 @@ public sealed class ManagedPluginStateStoreTests : IDisposable
 
     private static ManagedPluginSource Source() => new()
     {
-        Id = "fixture",
+        Id = ManagedPluginSourceId.Create("fixture"),
         Repository = "owner/repository",
         Format = "codex",
         ReferenceKind = ManagedPluginReferenceKind.Branch,

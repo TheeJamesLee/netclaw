@@ -15,7 +15,7 @@ public sealed class ManagedPluginJsonContractTests
     {
         var sourceJson = JsonSerializer.Serialize(new ManagedPluginSource
         {
-            Id = "dotnet-skills",
+            Id = ManagedPluginSourceId.Create("dotnet-skills"),
             Repository = "Aaronontheweb/dotnet-skills",
             Format = ManagedPluginSourceValidator.CodexFormat,
             ReferenceKind = ManagedPluginReferenceKind.Branch,

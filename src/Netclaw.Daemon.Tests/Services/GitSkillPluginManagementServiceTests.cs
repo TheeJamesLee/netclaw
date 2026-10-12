@@ -148,7 +148,7 @@ public sealed class GitSkillPluginManagementServiceTests : IDisposable
             .MigrateAsync(_paths.SqliteDbPath, TestContext.Current.CancellationToken);
         var source = new ManagedPluginSource
         {
-            Id = "fixture",
+            Id = ManagedPluginSourceId.Create("fixture"),
             Repository = "owner/repository",
             Format = "codex",
             ReferenceKind = ManagedPluginReferenceKind.Commit,

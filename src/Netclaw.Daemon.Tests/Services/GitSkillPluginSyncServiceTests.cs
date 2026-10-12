@@ -125,7 +125,7 @@ public sealed class GitSkillPluginSyncServiceTests : IDisposable
 
         Assert.Equal(1, Assert.Single(result.Sources).FailedCount);
         var receipt = await new ManagedPluginStateStore(_paths, _time).GetReceiptAsync(
-            source.Id, TestContext.Current.CancellationToken);
+            source.Id.Value, TestContext.Current.CancellationToken);
         Assert.NotNull(receipt);
         Assert.Equal(FirstCommit, receipt.InstalledCommit);
         Assert.Equal(oldPath, registry.GetByName("plugin-skill")!.FilePath);
@@ -149,7 +149,7 @@ public sealed class GitSkillPluginSyncServiceTests : IDisposable
 
         Assert.Equal(1, next.AcquireCount);
         var receipt = await new ManagedPluginStateStore(_paths, _time).GetReceiptAsync(
-            source.Id, TestContext.Current.CancellationToken);
+            source.Id.Value, TestContext.Current.CancellationToken);
         Assert.NotNull(receipt);
         Assert.Equal(FirstCommit, receipt.InstalledCommit);
         Assert.Equal(SecondCommit, receipt.LastObservedCommit);
@@ -167,7 +167,7 @@ public sealed class GitSkillPluginSyncServiceTests : IDisposable
         var refresher = CreateRefresher(registry, static () => { });
         var store = await CreateStoreAsync();
         await store.SaveRejectionAsync(
-            source.Id,
+            source.Id.Value,
             ManagedPluginSourceValidator.Fingerprint(source),
             FirstCommit,
             "unsafe plugin",
@@ -224,7 +224,7 @@ public sealed class GitSkillPluginSyncServiceTests : IDisposable
         var store = await CreateStoreAsync();
         var fingerprint = ManagedPluginSourceValidator.Fingerprint(source);
         await store.SaveRejectionAsync(
-            source.Id, fingerprint, FirstCommit, "scanner result", true, TestContext.Current.CancellationToken);
+            source.Id.Value, fingerprint, FirstCommit, "scanner result", true, TestContext.Current.CancellationToken);
         var acquirer = new FakeAcquirer(_paths, source, FirstCommit, "1.0.0", "plugin-skill");
         var alerts = new RecordingSink();
         var service = new ServerFeedSkillSyncService(
@@ -236,7 +236,7 @@ public sealed class GitSkillPluginSyncServiceTests : IDisposable
         Assert.Equal(0, acquirer.AcquireCount);
         Assert.Equal("skill.plugin.security_rejected", Assert.Single(alerts.Alerts).Type);
         Assert.True((await store.GetRejectionAsync(
-            source.Id, fingerprint, FirstCommit, TestContext.Current.CancellationToken))!.AlertEmitted);
+            source.Id.Value, fingerprint, FirstCommit, TestContext.Current.CancellationToken))!.AlertEmitted);
     }
 
     [Fact]
@@ -264,7 +264,7 @@ public sealed class GitSkillPluginSyncServiceTests : IDisposable
         var store = await CreateStoreAsync();
         var fingerprint = ManagedPluginSourceValidator.Fingerprint(source);
         await store.SaveRejectionAsync(
-            source.Id, fingerprint, FirstCommit, "scanner result", true,
+            source.Id.Value, fingerprint, FirstCommit, "scanner result", true,
             TestContext.Current.CancellationToken);
         var registry = new SkillRegistry();
         var service = new ServerFeedSkillSyncService(
@@ -279,7 +279,7 @@ public sealed class GitSkillPluginSyncServiceTests : IDisposable
 
         Assert.Equal(1, Assert.Single(result.Sources).ChangedCount);
         Assert.Null(await store.GetRejectionAsync(
-            source.Id, fingerprint, FirstCommit, TestContext.Current.CancellationToken));
+            source.Id.Value, fingerprint, FirstCommit, TestContext.Current.CancellationToken));
     }
 
     [Fact]
@@ -296,7 +296,7 @@ public sealed class GitSkillPluginSyncServiceTests : IDisposable
         var store = new ManagedPluginStateStore(_paths, _time);
         var fingerprint = ManagedPluginSourceValidator.Fingerprint(source);
         await store.SaveRejectionAsync(
-            source.Id, fingerprint, SecondCommit, "scanner result", true,
+            source.Id.Value, fingerprint, SecondCommit, "scanner result", true,
             TestContext.Current.CancellationToken);
         var retryService = new ServerFeedSkillSyncService(
             new SkillFeedsConfig { Plugins = [source] }, _paths, refresher, _time,
@@ -309,7 +309,7 @@ public sealed class GitSkillPluginSyncServiceTests : IDisposable
 
         Assert.Equal(1, Assert.Single(result.Sources).UnchangedCount);
         Assert.Null(await store.GetRejectionAsync(
-            source.Id, fingerprint, SecondCommit, TestContext.Current.CancellationToken));
+            source.Id.Value, fingerprint, SecondCommit, TestContext.Current.CancellationToken));
     }
 
     [Fact]
@@ -403,7 +403,7 @@ public sealed class GitSkillPluginSyncServiceTests : IDisposable
         var result = await service.SyncAsync(TestContext.Current.CancellationToken);
 
         Assert.Equal(1, Assert.Single(result.Sources).FailedCount);
-        Assert.Equal(FirstCommit, (await store.GetReceiptAsync(original.Id, TestContext.Current.CancellationToken))!.InstalledCommit);
+        Assert.Equal(FirstCommit, (await store.GetReceiptAsync(original.Id.Value, TestContext.Current.CancellationToken))!.InstalledCommit);
         Assert.True(Directory.Exists(oldDirectory));
         Assert.Contains("prior package", await File.ReadAllTextAsync(
             registry.GetByName("plugin-skill")!.FilePath, TestContext.Current.CancellationToken));
@@ -480,7 +480,7 @@ public sealed class GitSkillPluginSyncServiceTests : IDisposable
 
         Assert.Equal(1, Assert.Single(result.Sources).FailedCount);
         Assert.Null(await store.GetRejectionAsync(
-            source.Id, ManagedPluginSourceValidator.Fingerprint(source), FirstCommit,
+            source.Id.Value, ManagedPluginSourceValidator.Fingerprint(source), FirstCommit,
             TestContext.Current.CancellationToken));
         Assert.Empty(alerts.Alerts);
     }
@@ -499,7 +499,7 @@ public sealed class GitSkillPluginSyncServiceTests : IDisposable
             .SyncAsync(TestContext.Current.CancellationToken);
 
         var receipt = await new ManagedPluginStateStore(_paths, _time).GetReceiptAsync(
-            source.Id, TestContext.Current.CancellationToken);
+            source.Id.Value, TestContext.Current.CancellationToken);
         Assert.NotNull(receipt);
         Assert.Equal(SecondCommit, receipt.InstalledCommit);
         Assert.Equal(1, updated.AcquireCount);
@@ -511,9 +511,9 @@ public sealed class GitSkillPluginSyncServiceTests : IDisposable
     public async Task One_failed_plugin_does_not_block_a_successful_plugin()
     {
         var failed = Source();
-        failed.Id = "failed";
+        failed.Id = ManagedPluginSourceId.Create("failed");
         var healthy = Source();
-        healthy.Id = "healthy";
+        healthy.Id = ManagedPluginSourceId.Create("healthy");
         var store = await CreateStoreAsync();
         var registry = new SkillRegistry();
         var service = new ServerFeedSkillSyncService(
@@ -538,9 +538,9 @@ public sealed class GitSkillPluginSyncServiceTests : IDisposable
     public async Task Named_plugin_sync_skips_other_plugins_and_skill_servers()
     {
         var skipped = Source();
-        skipped.Id = "skipped";
+        skipped.Id = ManagedPluginSourceId.Create("skipped");
         var selected = Source();
-        selected.Id = "selected";
+        selected.Id = ManagedPluginSourceId.Create("selected");
         var store = await CreateStoreAsync();
         var acquirer = new TwoPluginAcquirer(_paths, skipped, selected);
         var service = new ServerFeedSkillSyncService(
@@ -570,9 +570,9 @@ public sealed class GitSkillPluginSyncServiceTests : IDisposable
     public async Task Plugin_only_sync_skips_skill_servers_but_checks_each_plugin()
     {
         var failed = Source();
-        failed.Id = "failed";
+        failed.Id = ManagedPluginSourceId.Create("failed");
         var healthy = Source();
-        healthy.Id = "healthy";
+        healthy.Id = ManagedPluginSourceId.Create("healthy");
         var store = await CreateStoreAsync();
         var acquirer = new TwoPluginAcquirer(_paths, failed, healthy);
         var service = new ServerFeedSkillSyncService(
@@ -608,7 +608,7 @@ public sealed class GitSkillPluginSyncServiceTests : IDisposable
             ReceiptCandidate(FirstCommit, "1.0.0"),
             TestContext.Current.CancellationToken);
         var other = Source();
-        other.Id = "other";
+        other.Id = ManagedPluginSourceId.Create("other");
         var acquirer = new FakeAcquirer(_paths, other, SecondCommit, "2.0.0", "other-skill");
         var service = new ServerFeedSkillSyncService(
             new SkillFeedsConfig { Plugins = [other] },
@@ -622,12 +622,12 @@ public sealed class GitSkillPluginSyncServiceTests : IDisposable
             new RecordingSink());
 
         var result = await service.SyncAsync(
-            ServerFeedSkillSyncActor.Run.ForPlugin(removed.Id, retryRejected: false),
+            ServerFeedSkillSyncActor.Run.ForPlugin(removed.Id.Value, retryRejected: false),
             TestContext.Current.CancellationToken);
 
         Assert.Empty(result.Sources);
         Assert.True(result.Inventory.Succeeded);
-        Assert.Null(await store.GetReceiptAsync(removed.Id, TestContext.Current.CancellationToken));
+        Assert.Null(await store.GetReceiptAsync(removed.Id.Value, TestContext.Current.CancellationToken));
         Assert.Equal(0, acquirer.ResolveCount);
     }
 
@@ -687,7 +687,7 @@ public sealed class GitSkillPluginSyncServiceTests : IDisposable
 
     private static ManagedPluginSource Source() => new()
     {
-        Id = "fixture",
+        Id = ManagedPluginSourceId.Create("fixture"),
         Repository = "owner/repository",
         Format = "codex",
         ReferenceKind = ManagedPluginReferenceKind.Branch,

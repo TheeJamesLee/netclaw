@@ -55,7 +55,7 @@ public sealed class DaemonRestartSignalTests
 
         store.Add(new ManagedPluginSource
         {
-            Id = "team-tools",
+            Id = ManagedPluginSourceId.Create("team-tools"),
             Repository = "owner/repository",
             Format = "codex",
             ReferenceKind = ManagedPluginReferenceKind.Branch,

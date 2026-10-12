@@ -3,6 +3,9 @@
 //      Copyright (C) 2026 - 2026 Petabridge, LLC <https://petabridge.com>
 // </copyright>
 // -----------------------------------------------------------------------
+using System.ComponentModel;
+using System.Globalization;
+using System.Text.Json;
 using System.Text.Json.Serialization;
 
 namespace Netclaw.Configuration;
@@ -43,7 +46,7 @@ public enum ManagedPluginReferenceKind
 /// <summary>A managed plugin source from a public GitHub repository.</summary>
 public sealed class ManagedPluginSource
 {
-    public string Id { get; set; } = "";
+    public ManagedPluginSourceId Id { get; set; }
     public string Repository { get; set; } = "";
     public string Format { get; set; } = ManagedPluginSourceValidator.AutoFormat;
     public string? Subdirectory { get; set; }
@@ -51,6 +54,87 @@ public sealed class ManagedPluginSource
     public string Reference { get; set; } = "";
     public bool Enabled { get; set; } = true;
     public int TimeoutSeconds { get; set; } = 60;
+}
+
+/// <summary>
+/// An operator-assigned managed plugin source identifier.
+/// </summary>
+/// <remarks>
+/// The identifier is a durable directory name and a SQLite receipt key. It must
+/// use lowercase letters, numbers, and single hyphens. The type marks the value
+/// as a source identifier, so a caller cannot pass a repository or subdirectory
+/// string to a path or receipt method that needs a source identifier.
+/// </remarks>
+[JsonConverter(typeof(ManagedPluginSourceIdJsonConverter))]
+[TypeConverter(typeof(ManagedPluginSourceIdTypeConverter))]
+public readonly struct ManagedPluginSourceId : IEquatable<ManagedPluginSourceId>
+{
+    private readonly string? _value;
+
+    private ManagedPluginSourceId(string? value) => _value = value;
+
+    /// <summary>The source identifier text.</summary>
+    public string Value => _value ?? string.Empty;
+
+    /// <summary>
+    /// Wraps configuration text without validating it. Validation stays in
+    /// <see cref="ManagedPluginSourceValidator"/> so an invalid value produces
+    /// the startup error, not a deserialization exception.
+    /// </summary>
+    internal static ManagedPluginSourceId FromRaw(string? value) => new(value);
+
+    public static bool TryCreate(string? value, out ManagedPluginSourceId id)
+    {
+        if (value is not null && ManagedPluginSourceValidator.TryValidateId(value, out _))
+        {
+            id = new ManagedPluginSourceId(value);
+            return true;
+        }
+
+        id = default;
+        return false;
+    }
+
+    public static ManagedPluginSourceId Create(string value)
+        => TryCreate(value, out var id)
+            ? id
+            : throw new ArgumentException(
+                "The plugin source ID must use lowercase letters, numbers, and single hyphens.",
+                nameof(value));
+
+    public override string ToString() => Value;
+
+    public bool Equals(ManagedPluginSourceId other) => StringComparer.Ordinal.Equals(Value, other.Value);
+
+    public override bool Equals(object? obj) => obj is ManagedPluginSourceId other && Equals(other);
+
+    public override int GetHashCode() => StringComparer.Ordinal.GetHashCode(Value);
+
+    public static bool operator ==(ManagedPluginSourceId left, ManagedPluginSourceId right) => left.Equals(right);
+
+    public static bool operator !=(ManagedPluginSourceId left, ManagedPluginSourceId right) => !left.Equals(right);
+}
+
+/// <summary>Serializes a managed plugin source identifier as its string value.</summary>
+public sealed class ManagedPluginSourceIdJsonConverter : JsonConverter<ManagedPluginSourceId>
+{
+    public override ManagedPluginSourceId Read(ref Utf8JsonReader reader, Type typeToConvert, JsonSerializerOptions options)
+        => ManagedPluginSourceId.FromRaw(reader.GetString());
+
+    public override void Write(Utf8JsonWriter writer, ManagedPluginSourceId value, JsonSerializerOptions options)
+        => writer.WriteStringValue(value.Value);
+}
+
+/// <summary>Binds a managed plugin source identifier from configuration text.</summary>
+public sealed class ManagedPluginSourceIdTypeConverter : TypeConverter
+{
+    public override bool CanConvertFrom(ITypeDescriptorContext? context, Type sourceType)
+        => sourceType == typeof(string) || base.CanConvertFrom(context, sourceType);
+
+    public override object? ConvertFrom(ITypeDescriptorContext? context, CultureInfo? culture, object value)
+        => value is string text
+            ? ManagedPluginSourceId.FromRaw(text)
+            : base.ConvertFrom(context, culture, value);
 }
 
 /// <summary>Validates and canonicalizes managed GitHub plugin source data.</summary>
@@ -78,7 +162,7 @@ public static class ManagedPluginSourceValidator
             error = $"No more than {MaximumSourceCount} GitHub plugins can be configured.";
             return false;
         }
-        var duplicate = sources.GroupBy(source => source.Id, StringComparer.OrdinalIgnoreCase)
+        var duplicate = sources.GroupBy(source => source.Id.Value, StringComparer.OrdinalIgnoreCase)
             .FirstOrDefault(group => group.Count() > 1);
         if (duplicate is not null)
         {
@@ -139,7 +223,7 @@ public static class ManagedPluginSourceValidator
     {
         ArgumentNullException.ThrowIfNull(source);
 
-        if (!TryValidateId(source.Id, out error))
+        if (!TryValidateId(source.Id.Value, out error))
             return false;
         if (!TryNormalizeRepository(source.Repository, out var repository, out error)
             || !string.Equals(repository, source.Repository, StringComparison.Ordinal))

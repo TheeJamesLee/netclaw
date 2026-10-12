@@ -45,11 +45,11 @@ public sealed class NetclawPaths
     // Managed plugin commits remain immutable while the registry can reference them.
     public string ManagedGitSkillsDirectory => Path.Combine(SkillsDirectory, ".git-plugins");
 
-    public string ManagedGitSkillDirectory(string sourceName)
-        => Path.Combine(ManagedGitSkillsDirectory, sourceName);
+    public string ManagedGitSkillDirectory(ManagedPluginSourceId sourceName)
+        => Path.Combine(ManagedGitSkillsDirectory, sourceName.Value);
 
     public string ManagedGitSkillCommitDirectory(
-        string sourceName,
+        ManagedPluginSourceId sourceName,
         string sourceFingerprint,
         string commit)
         => Path.Combine(ManagedGitSkillDirectory(sourceName), sourceFingerprint, "commits", commit);

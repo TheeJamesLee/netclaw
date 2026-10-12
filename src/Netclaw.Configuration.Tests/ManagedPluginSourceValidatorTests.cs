@@ -71,7 +71,7 @@ public sealed class ManagedPluginSourceValidatorTests
         var sources = Enumerable.Range(0, 21).Select(index =>
         {
             var source = Source();
-            source.Id = $"source-{index}";
+            source.Id = ManagedPluginSourceId.Create($"source-{index}");
             return source;
         }).ToArray();
 
@@ -140,7 +140,7 @@ public sealed class ManagedPluginSourceValidatorTests
 
     private static ManagedPluginSource Source() => new()
     {
-        Id = "dotnet-skills",
+        Id = ManagedPluginSourceId.Create("dotnet-skills"),
         Repository = "Aaronontheweb/dotnet-skills",
         Format = "codex",
         ReferenceKind = ManagedPluginReferenceKind.Branch,
