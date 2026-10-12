@@ -931,11 +931,7 @@ static IReadOnlyList<string> ConfigureDaemonServices(
 
     // The runner owns one pass. The actor owns startup, timers, and shared requests.
     services.AddSingleton<ManagedPluginStateStore>();
-    services.AddHttpClient("GitSkillPlugin", client => client.Timeout = Timeout.InfiniteTimeSpan)
-        .ConfigurePrimaryHttpMessageHandler(GitSkillPluginAcquirer.CreateHttpHandler)
-        .AddNetclawHeaders("git-skill-plugin");
     services.AddSingleton<IGitSkillPluginAcquirer>(sp => new GitSkillPluginAcquirer(
-        sp.GetRequiredService<IHttpClientFactory>().CreateClient("GitSkillPlugin"),
         paths,
         sp.GetRequiredService<TimeProvider>(),
         sp.GetRequiredService<ISkillContentScanner>()));
