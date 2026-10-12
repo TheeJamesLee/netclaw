@@ -557,6 +557,140 @@ public sealed class SkillCommandTests : IDisposable
     }
 
     [Fact]
+    public async Task Plugin_command_ignores_an_unsafe_daemon_problem_detail()
+    {
+        var daemonApi = CreateDaemonApi(_ => new HttpResponseMessage(HttpStatusCode.InternalServerError)
+        {
+            Content = new StringContent(
+                "{\"title\":\"Plugin operation failed\",\"detail\":\"System.InvalidOperationException: boom\\n   at Netclaw.Secret()\"}",
+                Encoding.UTF8,
+                "application/problem+json"),
+        });
+
+        var exit = await PluginCommand.RunAsync(
+            ["plugin", "list"],
+            daemonApi,
+            TimeProvider.System,
+            TextReader.Null,
+            _output);
+
+        Assert.Equal(1, exit);
+        Assert.Contains("Plugin operation failed", _output.ToString());
+        Assert.DoesNotContain("InvalidOperationException", _output.ToString(), StringComparison.Ordinal);
+        Assert.DoesNotContain("Netclaw.Secret", _output.ToString(), StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task Plugin_install_reports_a_sync_problem_detail()
+    {
+        var daemonApi = CreateDaemonApi(request =>
+        {
+            if (request.RequestUri!.AbsolutePath == "/api/plugins")
+            {
+                return FakeHttpMessageHandler.JsonResponse(new
+                {
+                    restartGeneration = 4,
+                    plugin = Plugin(ManagedPluginApi.PluginStatus.NotInstalled, installedCommit: null),
+                });
+            }
+            if (request.RequestUri.AbsolutePath == "/api/health/ready")
+            {
+                var ready = new HttpResponseMessage(HttpStatusCode.OK);
+                ready.Headers.Add("X-Netclaw-Generation", "5");
+                return ready;
+            }
+            if (request.RequestUri.AbsolutePath == "/api/skills/sync")
+            {
+                return new HttpResponseMessage(HttpStatusCode.UnprocessableEntity)
+                {
+                    Content = new StringContent(
+                        "{\"title\":\"Plugin candidate rejected\",\"detail\":\"The scanner rejected the plugin commit.\"}",
+                        Encoding.UTF8,
+                        "application/problem+json"),
+                };
+            }
+
+            throw new InvalidOperationException($"Unexpected request {request.Method} {request.RequestUri.PathAndQuery}.");
+        });
+
+        var exit = await PluginCommand.RunAsync(
+            ["plugin", "install", "owner/repository", "--id", "fixture", "--yes"],
+            daemonApi,
+            TimeProvider.System,
+            TextReader.Null,
+            _output);
+
+        Assert.Equal(1, exit);
+        Assert.Contains("The scanner rejected the plugin commit.", _output.ToString());
+        Assert.DoesNotContain("configured but is not installed", _output.ToString(), StringComparison.Ordinal);
+        Assert.DoesNotContain("HTTP 422", _output.ToString(), StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task Plugin_enable_reports_a_sync_result_error()
+    {
+        var requests = new List<string>();
+        var daemonApi = CreateDaemonApi(request =>
+        {
+            requests.Add($"{request.Method} {request.RequestUri!.PathAndQuery}");
+            if (request.Method == HttpMethod.Patch)
+            {
+                return FakeHttpMessageHandler.JsonResponse(new
+                {
+                    restartGeneration = 4,
+                    sourceId = "fixture",
+                    changed = false,
+                });
+            }
+            if (request.RequestUri.AbsolutePath == "/api/plugins")
+            {
+                return FakeHttpMessageHandler.JsonResponse(new
+                {
+                    plugins = new[] { Plugin(ManagedPluginApi.PluginStatus.NotInstalled, installedCommit: null) },
+                });
+            }
+            if (request.RequestUri.AbsolutePath == "/api/skills/sync")
+            {
+                return FakeHttpMessageHandler.JsonResponse(new
+                {
+                    passId = "enable-pass",
+                    sources = new[]
+                    {
+                        new
+                        {
+                            name = "fixture",
+                            sourceKind = SkillSyncResult.GitPluginSourceKind,
+                            changedCount = 0,
+                            unchangedCount = 0,
+                            rejectedCount = 1,
+                            failedCount = 0,
+                            sidecar = "not-applicable",
+                            error = "The scanner rejected a plugin skill.",
+                        },
+                    },
+                    inventory = new { succeeded = true, acceptedCount = 0, rejectedCount = 1 },
+                });
+            }
+
+            throw new InvalidOperationException($"Unexpected request {request.Method} {request.RequestUri.PathAndQuery}.");
+        });
+
+        var exit = await PluginCommand.RunAsync(
+            ["plugin", "enable", "fixture", "--yes"],
+            daemonApi,
+            TimeProvider.System,
+            TextReader.Null,
+            _output);
+
+        Assert.Equal(1, exit);
+        Assert.Equal(
+            ["PATCH /api/plugins/fixture", "GET /api/plugins", "POST /api/skills/sync?pluginId=fixture"],
+            requests);
+        Assert.Contains("The scanner rejected a plugin skill.", _output.ToString());
+        Assert.DoesNotContain("configured but is not installed", _output.ToString(), StringComparison.Ordinal);
+    }
+
+    [Fact]
     public async Task Plugin_command_replaces_an_oversized_error_body_with_a_status()
     {
         var remoteBody = new string('x', 5_000);
@@ -668,7 +802,7 @@ public sealed class SkillCommandTests : IDisposable
             TextReader.Null,
             _output);
 
-        Assert.Equal(0, exit);
+        Assert.True(exit == 0, _output.ToString());
         Assert.Equal(["GET /api/plugins", "POST /api/skills/sync?pluginsOnly=true"], requests);
     }
 

@@ -111,6 +111,12 @@ static async Task RunAsync(string[] args)
         args = ["chat"];
     }
 
+    if (mode is "plugin" && PluginCommand.ShouldShowHelp(args))
+    {
+        Environment.ExitCode = PluginCommand.WriteHelp(Console.Out);
+        return;
+    }
+
     // Doctor and status run when netclaw.json or secrets.json cannot be loaded and report it;
     // any other command that needs the config ends at the handler above with one line.
     string? configProblem = null;
