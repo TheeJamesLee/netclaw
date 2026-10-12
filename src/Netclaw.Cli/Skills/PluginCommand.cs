@@ -21,7 +21,7 @@ internal static class PluginCommand
         TextWriter output)
     {
         var action = args.Length > 1 ? args[1] : "help";
-        if (action is "help" or "-h" or "--help")
+        if (ShouldShowHelp(args))
             return WriteHelp(output);
         if (daemonApi is null)
         {
@@ -382,14 +382,36 @@ internal static class PluginCommand
         CancellationToken cancellationToken)
     {
         var sync = await api.SyncPluginAsync(name, cancellationToken, retryRejected: false);
-        var source = sync?.Sources.FirstOrDefault(
+        if (sync is null || sync.Inventory is null || sync.Sources is null)
+        {
+            output.WriteLine($"Plugin '{name}' sync failed: the daemon returned an unreadable result.");
+            return 1;
+        }
+        var source = sync.Sources.FirstOrDefault(
             item => item.SourceKind == SkillSyncResult.GitPluginSourceKind
                 && string.Equals(item.Name, name, StringComparison.OrdinalIgnoreCase));
+        if (!sync.Inventory.Succeeded)
+        {
+            output.WriteLine(string.IsNullOrWhiteSpace(sync.Inventory.Error)
+                ? $"Plugin '{name}' sync failed: the inventory refresh failed."
+                : $"Plugin '{name}' sync failed: {SafeText(sync.Inventory.Error, 512)}");
+            return 1;
+        }
+        if (expectedStatus == ManagedPluginApi.PluginStatus.Installed
+            && source is not null
+            && (source.FailedCount > 0 || source.RejectedCount > 0))
+        {
+            output.WriteLine(string.IsNullOrWhiteSpace(source.Error)
+                ? $"Plugin '{name}' sync failed: changed={source.ChangedCount} unchanged={source.UnchangedCount} rejected={source.RejectedCount} failed={source.FailedCount}."
+                : $"Plugin '{name}' sync failed: {SafeText(source.Error, 512)}");
+            WriteNotices(source, output);
+            return 1;
+        }
+
         var plugins = await api.ListPluginsAsync(cancellationToken);
         var plugin = plugins?.Plugins.FirstOrDefault(
             item => string.Equals(item.SourceId, name, StringComparison.OrdinalIgnoreCase));
-        if (sync?.Inventory.Succeeded != true
-            || plugin?.Status != expectedStatus
+        if (plugin?.Status != expectedStatus
             || (expectedStatus == ManagedPluginApi.PluginStatus.Installed
                 && (source is null || source.FailedCount > 0 || source.RejectedCount > 0)))
         {
@@ -635,6 +657,13 @@ internal static class PluginCommand
             output.WriteLine($"Notice: {SafeText(notice, 512)}");
     }
 
+    internal static bool ShouldShowHelp(string[] args)
+    {
+        var action = args.Length > 1 ? args[1] : "help";
+        return action is "help" or "-h" or "--help"
+            || CliArgsParser.HasTrailingHelpToken(args, startIndex: 2, includeBareHelp: false);
+    }
+
     private static string SafeText(string value, int maximumLength)
     {
         var safe = new string(value.Select(
@@ -643,7 +672,7 @@ internal static class PluginCommand
         return safe.Length <= maximumLength ? safe : safe[..maximumLength];
     }
 
-    private static int WriteHelp(TextWriter output)
+    internal static int WriteHelp(TextWriter output)
     {
         output.WriteLine("Usage: netclaw plugin <action>");
         output.WriteLine();

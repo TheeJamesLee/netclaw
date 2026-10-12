@@ -248,7 +248,7 @@ public sealed class DaemonApi
             HttpMethod.Post,
             $"{_endpoint}/api/skills/sync{suffix}");
         using var response = await client.SendAsync(request, HttpCompletionOption.ResponseHeadersRead, ct);
-        response.EnsureSuccessStatusCode();
+        await EnsureDaemonSuccessAsync(response, ct);
         var stream = await response.Content.ReadAsStreamAsync(ct);
         return await JsonSerializer.DeserializeAsync<SkillSyncResult.Response>(stream, JsonDefaults.Api, ct);
     }
@@ -259,7 +259,7 @@ public sealed class DaemonApi
         using var cts = CreateTimeoutCts(DefaultTimeout, ct);
         var client = CreateHttpClient();
         using var response = await client.GetAsync($"{_endpoint}/api/plugins", cts.Token);
-        await EnsurePluginSuccessAsync(response, cts.Token);
+        await EnsureDaemonSuccessAsync(response, cts.Token);
         var stream = await response.Content.ReadAsStreamAsync(cts.Token);
         return await JsonSerializer.DeserializeAsync<ManagedPluginApi.ListResponse>(
             stream,
@@ -278,7 +278,7 @@ public sealed class DaemonApi
             request,
             JsonDefaults.Api,
             ct);
-        await EnsurePluginSuccessAsync(response, ct);
+        await EnsureDaemonSuccessAsync(response, ct);
         var stream = await response.Content.ReadAsStreamAsync(ct);
         return await JsonSerializer.DeserializeAsync<ManagedPluginApi.InstallResponse>(
             stream,
@@ -302,7 +302,7 @@ public sealed class DaemonApi
                 options: JsonDefaults.Api),
         };
         using var response = await client.SendAsync(request, cts.Token);
-        await EnsurePluginSuccessAsync(response, cts.Token);
+        await EnsureDaemonSuccessAsync(response, cts.Token);
         var stream = await response.Content.ReadAsStreamAsync(cts.Token);
         return await JsonSerializer.DeserializeAsync<ManagedPluginApi.MutationResponse>(
             stream,
@@ -319,7 +319,7 @@ public sealed class DaemonApi
         using var response = await client.DeleteAsync(
             $"{_endpoint}/api/plugins/{Uri.EscapeDataString(name)}",
             cts.Token);
-        await EnsurePluginSuccessAsync(response, cts.Token);
+        await EnsureDaemonSuccessAsync(response, cts.Token);
         var stream = await response.Content.ReadAsStreamAsync(cts.Token);
         return await JsonSerializer.DeserializeAsync<ManagedPluginApi.MutationResponse>(
             stream,
@@ -327,7 +327,7 @@ public sealed class DaemonApi
             cts.Token);
     }
 
-    private static async Task EnsurePluginSuccessAsync(
+    private static async Task EnsureDaemonSuccessAsync(
         HttpResponseMessage response,
         CancellationToken cancellationToken)
     {
@@ -356,7 +356,7 @@ public sealed class DaemonApi
                 var root = document.RootElement;
                 if (root.ValueKind == JsonValueKind.Object)
                 {
-                    message = ReadProblemText(root, "detail") ?? ReadProblemText(root, "title");
+                    message = ReadSafeProblemText(root, "detail") ?? ReadSafeProblemText(root, "title");
                 }
             }
         }
@@ -382,6 +382,32 @@ public sealed class DaemonApi
             && value.ValueKind == JsonValueKind.String
                 ? value.GetString()
                 : null;
+
+    private static string? ReadSafeProblemText(JsonElement root, string propertyName)
+    {
+        var text = ReadProblemText(root, propertyName);
+        return IsSafeProblemText(text) ? text : null;
+    }
+
+    private static bool IsSafeProblemText(string? text)
+    {
+        if (string.IsNullOrWhiteSpace(text))
+            return false;
+        if (text.Contains("Exception:", StringComparison.Ordinal)
+            || (text.Contains("System.", StringComparison.Ordinal)
+                && text.Contains("Exception", StringComparison.Ordinal)))
+        {
+            return false;
+        }
+
+        foreach (var line in text.Split('\n', '\r'))
+        {
+            if (line.TrimStart().StartsWith("at ", StringComparison.Ordinal))
+                return false;
+        }
+
+        return true;
+    }
 
     // ── Reminders ─────────────────────────────────────────────────────
 

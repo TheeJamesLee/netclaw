@@ -105,6 +105,12 @@ static async Task RunAsync(string[] args)
         args = ["chat"];
     }
 
+    if (mode is "plugin" && PluginCommand.ShouldShowHelp(args))
+    {
+        Environment.ExitCode = PluginCommand.WriteHelp(Console.Out);
+        return;
+    }
+
     // Kick off the update check only for modes that do not boot Termina or
     // otherwise own the current command's startup flow. Buffering the notice
     // protects active TUIs from stray stderr, but it does not make the
