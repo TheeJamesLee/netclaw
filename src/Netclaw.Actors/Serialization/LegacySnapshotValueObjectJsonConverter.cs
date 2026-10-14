@@ -86,7 +86,10 @@ internal sealed class LegacySnapshotValueObjectJsonConverter : JsonConverter
             if (primitive.Type != JTokenType.Integer && !isAkkaNumericSurrogate)
                 throw new JsonSerializationException("A turn number must be an integer.");
 
-            return new TurnNumber(primitive.ToObject<int>(serializer));
+            var value = primitive.Type == JTokenType.Integer
+                ? primitive.ToObject<int>()
+                : primitive.ToObject<int>(serializer);
+            return new TurnNumber(value);
         }
 
         if (primitive.Type != JTokenType.String || primitive.Value<string>() is not { } text)
