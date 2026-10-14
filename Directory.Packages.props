@@ -16,7 +16,7 @@
          once the AI packages move to a patch release. -->
     <MicrosoftExtensionsTimeProviderTestingVersion>10.9.0</MicrosoftExtensionsTimeProviderTestingVersion>
     <OpenAIVersion>2.12.0</OpenAIVersion>
-    <MicrosoftAspNetCoreVersion>10.0.12</MicrosoftAspNetCoreVersion>
+    <MicrosoftAspNetCoreVersion>10.0.13</MicrosoftAspNetCoreVersion>
     <SkiaSharpVersion>4.152.0</SkiaSharpVersion>
     <!-- Aspire pins are exercised only by samples/Netclaw.Demo.AppHost and its
          integration tests. The 13.x line is the .NET 10 generation of Aspire;
@@ -45,8 +45,8 @@
          GHSA-v5pm-xwqc-g5wc, circular schema references can terminate OpenAPI
          parsing). Keep this on the patched 2.x line until ASP.NET Core ships a
          non-vulnerable transitive dependency.
-         Microsoft.AspNetCore.OpenApi 10.0.12 requires Microsoft.OpenApi
-         >= 2.12.0 && < 3.0.0. Central transitive pinning turns a lower pin
+         Microsoft.AspNetCore.OpenApi 10.0.13 requires Microsoft.OpenApi
+         >= 2.12.2 && < 3.0.0. Central transitive pinning turns a lower pin
          into an NU1109 downgrade error, so keep this version at or above the
          floor that MicrosoftAspNetCoreVersion demands. -->
     <PackageVersion Include="Microsoft.OpenApi" Version="2.12.2" />
@@ -58,7 +58,7 @@
     <PackageVersion Include="ModelContextProtocol.AspNetCore" Version="$(ModelContextProtocolVersion)" />
     <PackageVersion Include="Microsoft.AspNetCore.SignalR.Client" Version="$(MicrosoftAspNetCoreVersion)" />
     <PackageVersion Include="Microsoft.AspNetCore.DataProtection" Version="$(MicrosoftAspNetCoreVersion)" />
-    <PackageVersion Include="System.Security.Cryptography.Xml" Version="10.0.13" />
+    <PackageVersion Include="System.Security.Cryptography.Xml" Version="$(MicrosoftAspNetCoreVersion)" />
     <PackageVersion Include="Microsoft.AspNetCore.TestHost" Version="$(MicrosoftAspNetCoreVersion)" />
     <PackageVersion Include="Microsoft.Data.Sqlite" Version="$(MicrosoftAspNetCoreVersion)" />
     <PackageVersion Include="Microsoft.Extensions.AI.OpenAI" Version="$(MicrosoftExtensionsAIVersion)" />
@@ -137,10 +137,8 @@
   <ItemGroup>
     <PackageVersion Include="Microsoft.ML.OnnxRuntime" Version="1.30.0" />
     <PackageVersion Include="FastBertTokenizer" Version="1.2.6" />
-    <!-- Pinned to 10.0.10 (matches $(MicrosoftAspNetCoreVersion)), not the lowest version that
-         compiles: Microsoft.Extensions.AI 10.8.0 already pulls System.Numerics.Tensors
-         >= 10.0.10 transitively, and CentralPackageTransitivePinningEnabled requires the
-         central pin to be at least as high as every transitive floor in the graph. -->
+    <!-- Pinned to the 10.0.10 transitive floor for Microsoft.Extensions.AI. Central
+         transitive pinning requires a central version at or above every transitive floor. -->
     <PackageVersion Include="System.Numerics.Tensors" Version="10.0.10" />
   </ItemGroup>
   <!-- Source generators -->
