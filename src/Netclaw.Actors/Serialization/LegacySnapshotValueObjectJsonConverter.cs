@@ -41,7 +41,7 @@ internal sealed class LegacySnapshotValueObjectJsonConverter : JsonConverter
         JsonSerializer serializer)
     {
         var valueType = Nullable.GetUnderlyingType(objectType) ?? objectType;
-        if (reader.TokenType is JsonToken.Null or JsonToken.Undefined)
+        if (reader.TokenType == JsonToken.Null)
         {
             if (Nullable.GetUnderlyingType(objectType) is not null)
                 return null;
