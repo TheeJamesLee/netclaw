@@ -59,10 +59,13 @@ internal sealed class LegacySnapshotValueObjectJsonConverter : JsonConverter
 
         if (valueType == typeof(TurnNumber))
         {
-            if (primitive.Type != JTokenType.Integer)
+            var isAkkaNumericSurrogate = primitive is JObject surrogate
+                                         && surrogate.Count == 1
+                                         && surrogate["$"]?.Type == JTokenType.String;
+            if (primitive.Type != JTokenType.Integer && !isAkkaNumericSurrogate)
                 throw new JsonSerializationException("A turn number must be an integer.");
 
-            return new TurnNumber(primitive.ToObject<int>());
+            return new TurnNumber(primitive.ToObject<int>(serializer));
         }
 
         if (primitive.Type != JTokenType.String || primitive.Value<string>() is not { } text)
