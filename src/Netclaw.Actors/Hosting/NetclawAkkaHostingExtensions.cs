@@ -10,6 +10,7 @@ using Akka.Reminders;
 using Akka.Reminders.Sharding;
 using Akka.Reminders.Sqlite;
 using Akka.Reminders.Sqlite.Configuration;
+using Akka.Serialization;
 using Netclaw.Actors.Jobs;
 using Netclaw.Actors.Protocol;
 using Netclaw.Actors.Reminders;
@@ -242,6 +243,8 @@ public static class NetclawAkkaHostingExtensions
         this AkkaConfigurationBuilder builder)
     {
         return builder
+            .AddSetup(NewtonSoftJsonSerializerSetup.Create(settings =>
+                settings.SerializationBinder = new LegacySessionProtocolSerializationBinder()))
             .WithCustomSerializer(
                 serializerIdentifier: "netclaw-protobuf",
                 boundTypes: new[] { typeof(INetclawSerializableMessage) },
