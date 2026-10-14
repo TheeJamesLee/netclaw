@@ -7,13 +7,14 @@ using Newtonsoft.Json;
 using Newtonsoft.Json.Linq;
 using Netclaw.Actors.Jobs;
 using Netclaw.Actors.Protocol;
+using Netclaw.Actors.Reminders;
 using Netclaw.Media;
 using Netclaw.Tools;
 
 namespace Netclaw.Actors.Serialization;
 
 /// <summary>
-/// Reads primitive fields from legacy session snapshots after a value-object migration.
+/// Reads primitive fields from legacy session data after a value-object migration.
 /// </summary>
 internal sealed class LegacySnapshotValueObjectJsonConverter : JsonConverter
 {
@@ -96,6 +97,7 @@ internal sealed class LegacySnapshotValueObjectJsonConverter : JsonConverter
             throw new JsonSerializationException($"A {valueType.Name} value must be a string.");
 
         return valueType == typeof(SenderId) ? new SenderId(text)
+            : valueType == typeof(ReminderId) ? new ReminderId(text)
             : valueType == typeof(BackgroundJobId) ? new BackgroundJobId(text)
             : valueType == typeof(ToolCallId) ? new ToolCallId(text)
             : valueType == typeof(ToolName) ? new ToolName(text)
@@ -107,6 +109,7 @@ internal sealed class LegacySnapshotValueObjectJsonConverter : JsonConverter
         throw new NotSupportedException("This converter reads legacy values only.");
 
     private static bool IsStringValueType(Type valueType) => valueType == typeof(SenderId)
+                                                             || valueType == typeof(ReminderId)
                                                              || valueType == typeof(BackgroundJobId)
                                                              || valueType == typeof(ToolCallId)
                                                              || valueType == typeof(ToolName)

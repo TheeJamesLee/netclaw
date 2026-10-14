@@ -11,7 +11,7 @@ using Netclaw.Security;
 namespace Netclaw.Actors.Serialization;
 
 /// <summary>
-/// Reads event identities that the session protocol refactor moved.
+/// Reads persisted event identities that the session protocol refactor moved.
 /// </summary>
 internal sealed class LegacySessionProtocolSerializationBinder : ISerializationBinder
 {
@@ -44,7 +44,7 @@ internal sealed class LegacySessionProtocolSerializationBinder : ISerializationB
     {
         if (assemblyName is not null
             && string.Equals(new AssemblyName(assemblyName).Name, LegacyAssemblyName, StringComparison.Ordinal)
-            && LegacyTypes.TryGetValue(typeName, out var currentType))
+            && TryGetLegacyType(typeName, out var currentType))
         {
             return currentType;
         }
@@ -57,4 +57,20 @@ internal sealed class LegacySessionProtocolSerializationBinder : ISerializationB
     /// </summary>
     public void BindToName(Type serializedType, out string? assemblyName, out string? typeName)
         => DefaultBinder.BindToName(serializedType, out assemblyName, out typeName);
+
+    private static bool TryGetLegacyType(string typeName, out Type currentType)
+    {
+        if (LegacyTypes.TryGetValue(typeName, out currentType!))
+            return true;
+
+        if (typeName.EndsWith("[]", StringComparison.Ordinal)
+            && LegacyTypes.TryGetValue(typeName[..^2], out var elementType))
+        {
+            currentType = elementType.MakeArrayType();
+            return true;
+        }
+
+        currentType = null!;
+        return false;
+    }
 }

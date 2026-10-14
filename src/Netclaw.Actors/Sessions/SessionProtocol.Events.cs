@@ -39,6 +39,9 @@ public static partial class SessionProtocol
         /// (<see cref="SessionState.ProcessedReminderIds"/>) from
         /// event replay.
         /// </summary>
+        // Serializer 1 stored both source IDs as nullable strings in the journal.
+        // This reader preserves those records without changing new JSON writes.
+        [Newtonsoft.Json.JsonConverter(typeof(LegacySnapshotValueObjectJsonConverter))]
         public ReminderId? SourceReminderId { get; init; }
 
         /// <summary>
@@ -47,6 +50,7 @@ public static partial class SessionProtocol
         /// <see cref="Channels.MessageSource.BackgroundJobId"/> by the
         /// background job manager. Null for regular user turns.
         /// </summary>
+        [Newtonsoft.Json.JsonConverter(typeof(LegacySnapshotValueObjectJsonConverter))]
         public BackgroundJobId? SourceBackgroundJobId { get; init; }
 
         public IReadOnlyList<InputId> ConsumedInputIds { get; init; } = [];
