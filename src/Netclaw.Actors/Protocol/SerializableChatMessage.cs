@@ -32,6 +32,7 @@ public sealed record SerializableChatMessage : INetclawSerializableMessage
     /// <summary>
     /// The tool call ID this message is a result for. Present when role is Tool.
     /// </summary>
+    [Newtonsoft.Json.JsonConverter(typeof(LegacySnapshotValueObjectJsonConverter))]
     public ToolCallId? ToolCallId { get; init; }
 
     /// <summary>
@@ -51,6 +52,7 @@ public sealed record SerializableMediaReference : INetclawSerializableMessage
     public string RelativePath { get; init; } = string.Empty;
 
     /// <summary>MIME type of the media (e.g. "image/png").</summary>
+    [Newtonsoft.Json.JsonConverter(typeof(LegacySnapshotValueObjectJsonConverter))]
     public MimeType MimeType { get; init; }
 
     /// <summary>Content modality as integer for wire safety (maps to <see cref="MediaModality"/>).</summary>
@@ -82,8 +84,10 @@ public enum MediaModality
 /// </summary>
 public sealed record SerializableToolCall : INetclawSerializableMessage
 {
+    [Newtonsoft.Json.JsonConverter(typeof(LegacySnapshotValueObjectJsonConverter))]
     public ToolCallId CallId { get; init; }
 
+    [Newtonsoft.Json.JsonConverter(typeof(LegacySnapshotValueObjectJsonConverter))]
     public ToolName Name { get; init; }
 
     public string ArgumentsJson { get; init; } = string.Empty;

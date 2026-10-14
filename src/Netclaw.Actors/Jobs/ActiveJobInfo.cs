@@ -4,6 +4,7 @@
 // </copyright>
 // -----------------------------------------------------------------------
 using Netclaw.Configuration;
+using Netclaw.Actors.Serialization;
 
 namespace Netclaw.Actors.Jobs;
 
@@ -13,6 +14,7 @@ namespace Netclaw.Actors.Jobs;
 /// </summary>
 public sealed record ActiveJobInfo
 {
+    [Newtonsoft.Json.JsonConverter(typeof(LegacySnapshotValueObjectJsonConverter))]
     public required BackgroundJobId JobId { get; init; }
 
     public required string Command { get; init; }

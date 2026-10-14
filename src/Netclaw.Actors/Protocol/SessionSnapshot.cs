@@ -21,6 +21,7 @@ public sealed record SessionSnapshot : INetclawSerializableMessage
         {
             public string MessageId { get; init; } = string.Empty;
 
+            [Newtonsoft.Json.JsonConverter(typeof(LegacySnapshotValueObjectJsonConverter))]
             public SenderId SenderId { get; init; } = new(string.Empty);
 
             public long TimestampMs { get; init; }
@@ -30,6 +31,7 @@ public sealed record SessionSnapshot : INetclawSerializableMessage
 
         public string AuthorizedMessageId { get; init; } = string.Empty;
 
+        [Newtonsoft.Json.JsonConverter(typeof(LegacySnapshotValueObjectJsonConverter))]
         public SenderId? AuthorizerSenderId { get; init; }
 
         public string? LowerBound { get; init; }
@@ -62,6 +64,7 @@ public sealed record SessionSnapshot : INetclawSerializableMessage
     /// <see cref="DeliveryFailed"/> feedback after passivation.
     /// Null when no turn is eligible (initial state or retries exhausted).
     /// </summary>
+    [Newtonsoft.Json.JsonConverter(typeof(LegacySnapshotValueObjectJsonConverter))]
     public TurnNumber? EligibleDeliveryTurnNumber { get; init; }
 
     /// <summary>
