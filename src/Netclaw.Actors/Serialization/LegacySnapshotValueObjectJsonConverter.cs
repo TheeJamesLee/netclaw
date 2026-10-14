@@ -26,12 +26,7 @@ internal sealed class LegacySnapshotValueObjectJsonConverter : JsonConverter
     public override bool CanConvert(Type objectType)
     {
         var valueType = Nullable.GetUnderlyingType(objectType) ?? objectType;
-        return valueType == typeof(TurnNumber)
-               || valueType == typeof(SenderId)
-               || valueType == typeof(BackgroundJobId)
-               || valueType == typeof(ToolCallId)
-               || valueType == typeof(ToolName)
-               || valueType == typeof(MimeType);
+        return valueType == typeof(TurnNumber) || IsStringValueType(valueType);
     }
 
     public override object? ReadJson(
@@ -56,16 +51,20 @@ internal sealed class LegacySnapshotValueObjectJsonConverter : JsonConverter
             var wrappedValue = wrapped.GetValue("Value", StringComparison.OrdinalIgnoreCase);
             if (wrappedValue is null)
             {
-                var isEmptyNullableToolCallId = valueType == typeof(ToolCallId)
-                                                && Nullable.GetUnderlyingType(objectType) == typeof(ToolCallId)
-                                                && wrapped.Count == 2
-                                                && wrapped["$id"]?.Type == JTokenType.String
-                                                && wrapped["$type"]?.Type == JTokenType.String;
-                if (!isEmptyNullableToolCallId)
+                var idProperty = wrapped.Property("$id", StringComparison.Ordinal);
+                var hasOnlyAkkaMetadata = wrapped.Properties().All(property =>
+                    property.Name is "$id" or "$type");
+                var hasValidId = idProperty is null || idProperty.Value.Type == JTokenType.String;
+                var isEmptyNullableStringValue = Nullable.GetUnderlyingType(objectType) == valueType
+                                                 && IsStringValueType(valueType)
+                                                 && wrapped["$type"]?.Type == JTokenType.String
+                                                 && hasOnlyAkkaMetadata
+                                                 && hasValidId;
+                if (!isEmptyNullableStringValue)
                     throw new JsonSerializationException("A value-object snapshot has no Value field.");
 
                 return wrapped.ToObject(objectType, serializer)
-                       ?? throw new JsonSerializationException("An empty ToolCallId wrapper cannot be null.");
+                       ?? throw new JsonSerializationException("An empty nullable value-object wrapper cannot be null.");
             }
 
             primitive = wrappedValue;
@@ -103,4 +102,10 @@ internal sealed class LegacySnapshotValueObjectJsonConverter : JsonConverter
 
     public override void WriteJson(JsonWriter writer, object? value, JsonSerializer serializer) =>
         throw new NotSupportedException("This converter reads legacy values only.");
+
+    private static bool IsStringValueType(Type valueType) => valueType == typeof(SenderId)
+                                                             || valueType == typeof(BackgroundJobId)
+                                                             || valueType == typeof(ToolCallId)
+                                                             || valueType == typeof(ToolName)
+                                                             || valueType == typeof(MimeType);
 }
