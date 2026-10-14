@@ -49,13 +49,35 @@ internal sealed class LegacySnapshotValueObjectJsonConverter : JsonConverter
             throw new JsonSerializationException($"A null value cannot be read as {valueType.Name}.");
         }
 
-        var primitive = reader.TokenType switch
+        JToken primitive;
+        if (reader.TokenType == JsonToken.StartObject)
         {
-            JsonToken.StartObject => ReadWrappedValue(reader),
-            JsonToken.Integer or JsonToken.String => new JValue(reader.Value),
-            _ => throw new JsonSerializationException(
-                $"A {reader.TokenType} token cannot be read as {valueType.Name}.")
-        };
+            var wrapped = JObject.Load(reader);
+            var wrappedValue = wrapped.GetValue("Value", StringComparison.OrdinalIgnoreCase);
+            if (wrappedValue is null)
+            {
+                var isEmptyNullableToolCallId = valueType == typeof(ToolCallId)
+                                                && Nullable.GetUnderlyingType(objectType) == typeof(ToolCallId)
+                                                && wrapped.Count == 2
+                                                && wrapped["$id"]?.Type == JTokenType.String
+                                                && wrapped["$type"]?.Type == JTokenType.String;
+                if (!isEmptyNullableToolCallId)
+                    throw new JsonSerializationException("A value-object snapshot has no Value field.");
+
+                return wrapped.ToObject(objectType, serializer)
+                       ?? throw new JsonSerializationException("An empty ToolCallId wrapper cannot be null.");
+            }
+
+            primitive = wrappedValue;
+        }
+        else if (reader.TokenType is JsonToken.Integer or JsonToken.String)
+        {
+            primitive = new JValue(reader.Value);
+        }
+        else
+        {
+            throw new JsonSerializationException($"A {reader.TokenType} token cannot be read as {valueType.Name}.");
+        }
 
         if (valueType == typeof(TurnNumber))
         {
@@ -81,11 +103,4 @@ internal sealed class LegacySnapshotValueObjectJsonConverter : JsonConverter
 
     public override void WriteJson(JsonWriter writer, object? value, JsonSerializer serializer) =>
         throw new NotSupportedException("This converter reads legacy values only.");
-
-    private static JToken ReadWrappedValue(JsonReader reader)
-    {
-        var wrapped = JObject.Load(reader);
-        return wrapped.GetValue("Value", StringComparison.OrdinalIgnoreCase)
-               ?? throw new JsonSerializationException("A value-object snapshot has no Value field.");
-    }
 }
