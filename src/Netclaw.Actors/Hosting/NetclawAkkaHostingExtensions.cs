@@ -244,7 +244,7 @@ public static class NetclawAkkaHostingExtensions
     {
         return builder
             .AddSetup(NewtonSoftJsonSerializerSetup.Create(settings =>
-                settings.SerializationBinder = new LegacySessionProtocolSerializationBinder()))
+                settings.SerializationBinder = new LegacyJournalSerializationBinder()))
             .WithCustomSerializer(
                 serializerIdentifier: "netclaw-protobuf",
                 boundTypes: new[] { typeof(INetclawSerializableMessage) },

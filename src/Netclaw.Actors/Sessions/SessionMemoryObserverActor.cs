@@ -86,6 +86,13 @@ public sealed class SessionMemoryObserverActor : ReceivePersistentActor
 
         PersistenceId = $"memory-observer-{sessionId.Value}";
 
+        // V1 events carry anchor slugs only, so they restore anchor dedup and no proposal context.
+        Recover<LegacyMemoriesDistilled>(evt =>
+        {
+            foreach (var anchor in evt.Anchors)
+                _proposedAnchors.Add(anchor);
+        });
+
         Recover<MemoriesDistilledV2>(evt =>
         {
             foreach (var anchor in evt.Anchors)

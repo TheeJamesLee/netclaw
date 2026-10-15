@@ -18,6 +18,7 @@ using Netclaw.Actors.Jobs;
 using Netclaw.Actors.Memory;
 using Netclaw.Actors.Protocol;
 using Netclaw.Actors.Reminders;
+using Netclaw.Actors.Serialization;
 using Netclaw.Actors.Skills;
 using Netclaw.Actors.SubAgents;
 using Netclaw.Actors.Sessions.Handlers;
@@ -226,6 +227,8 @@ public sealed class LlmSessionActor : ReceivePersistentActor, IWithTimers
         Recover<ToolApprovalRequested>(ApplyToolApprovalRequested);
         Recover<ToolApprovalResolved>(ApplyToolApprovalResolved);
         Recover<ToolBatchAbandoned>(ApplyToolBatchAbandoned);
+        // Pre-0.9 journals hold this removed event. Recovery always ignored it.
+        Recover<LegacySystemPromptSet>(_ => { });
         Recover<SnapshotOffer>(offer =>
         {
             if (offer.Snapshot is SessionSnapshot snapshot)

@@ -13,6 +13,7 @@ using Microsoft.Extensions.AI;
 using Netclaw.Actors.Channels;
 using Netclaw.Actors.Protocol;
 using Netclaw.Actors.Reminders;
+using Netclaw.Actors.Serialization;
 using Netclaw.Channels;
 using Netclaw.Channels.Telemetry;
 using Netclaw.Configuration;
@@ -165,6 +166,7 @@ internal sealed class SlackThreadBindingActor : ReceivePersistentActor, IWithTim
             log: _log);
 
         Recover<CursorAdvanced>(ApplyCursorAdvanced);
+        Recover<LegacySlackCursorAdvanced>(legacy => ApplyCursorAdvanced(new CursorAdvanced(legacy.CursorTs)));
         Recover<PendingApprovalPromptTracked>(ApplyPendingApprovalPromptTracked);
         Recover<PendingApprovalPromptCleared>(ApplyPendingApprovalPromptCleared);
         // After journal replay completes, queue a one-shot hydration. Recovery
