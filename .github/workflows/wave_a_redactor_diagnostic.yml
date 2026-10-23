@@ -1,0 +1,161 @@
+name: Wave A redactor duration diagnostic
+
+on:
+  push:
+    branches:
+      - diagnostics/wave-a-redactor-windows-20261023
+
+permissions:
+  contents: read
+
+jobs:
+  redactor-duration:
+    runs-on: windows-latest
+    timeout-minutes: 20
+    steps:
+      - name: Capture runner details
+        shell: pwsh
+        run: |
+          New-Item -ItemType Directory -Force diagnostics | Out-Null
+          $os = Get-CimInstance Win32_OperatingSystem
+          $cpu = Get-CimInstance Win32_Processor
+          [ordered]@{
+            imageOs = $env:ImageOS
+            imageVersion = $env:ImageVersion
+            osCaption = $os.Caption
+            osVersion = $os.Version
+            cpu = @($cpu | ForEach-Object { $_.Name })
+            logicalProcessors = ($cpu | Measure-Object -Property NumberOfLogicalProcessors -Sum).Sum
+            physicalMemoryMb = [math]::Round($os.TotalVisibleMemorySize / 1024)
+          } | ConvertTo-Json -Depth 5 | Set-Content diagnostics/runner.json
+
+      - name: Checkout base
+        id: checkout_base
+        uses: actions/checkout@v7
+        with:
+          ref: aecbe73e1714e9acc2d68612e0cfa0d3abc4f33d
+          path: base
+          fetch-depth: 1
+          persist-credentials: false
+
+      - name: Checkout candidate
+        id: checkout_candidate
+        uses: actions/checkout@v7
+        with:
+          ref: 6c3578dfbcf832434a6ee03f59af56266e915c1d
+          path: candidate
+          fetch-depth: 1
+          persist-credentials: false
+
+      - name: Install pinned .NET SDK
+        id: setup_sdk
+        uses: actions/setup-dotnet@v6
+        with:
+          global-json-file: base/global.json
+
+      - name: Build refs and run four duration rows in ABBA order
+        if: always() && steps.checkout_base.outcome == 'success' && steps.checkout_candidate.outcome == 'success' && steps.setup_sdk.outcome == 'success'
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $PSNativeCommandUseErrorActionPreference = $false
+          $baseHash = (Get-FileHash base/global.json).Hash
+          $candidateHash = (Get-FileHash candidate/global.json).Hash
+          if ($baseHash -ne $candidateHash) { throw 'The base and candidate SDK pins differ.' }
+          Copy-Item base/global.json global.json
+          dotnet --version | Set-Content diagnostics/dotnet-version.txt
+          dotnet --info | Set-Content diagnostics/dotnet-info.txt
+
+          $buildCodes = [ordered]@{ base = $null; candidate = $null }
+          $runResults = @()
+          $testRows = @()
+          $failed = $false
+          $filter = 'FullyQualifiedName~Netclaw.Security.Tests.SecretOutputRedactorTests.Redact_stays_linear_on_long_runs_of_a_secret_word'
+          $sequence = @(
+            @{ name = 'base-1'; tree = 'base' },
+            @{ name = 'candidate-1'; tree = 'candidate' },
+            @{ name = 'candidate-2'; tree = 'candidate' },
+            @{ name = 'base-2'; tree = 'base' }
+          )
+
+          function Save-Checkpoint {
+            [ordered]@{
+              buildExitCodes = $buildCodes
+              expectedRowsPerRun = 4
+              filter = $filter
+              order = @($sequence | ForEach-Object { $_.name })
+              runs = @($runResults)
+            } | ConvertTo-Json -Depth 8 | Set-Content diagnostics/results.json
+            if ($testRows.Count) { $testRows | Export-Csv diagnostics/test-durations.csv -NoTypeInformation }
+            else { 'run,testName,outcome,duration' | Set-Content diagnostics/test-durations.csv }
+          }
+
+          function Get-Snapshot {
+            $os = Get-CimInstance Win32_OperatingSystem
+            $cpu = Get-CimInstance Win32_Processor
+            [ordered]@{
+              atUtc = [System.TimeProvider]::System.GetUtcNow().ToString('o')
+              cpuLoadPercent = ($cpu | Measure-Object -Property LoadPercentage -Average).Average
+              availableMemoryMb = [math]::Round($os.FreePhysicalMemory / 1024)
+            }
+          }
+
+          foreach ($tree in @('base', 'candidate')) {
+            dotnet build "$tree/src/Netclaw.Security.Tests/Netclaw.Security.Tests.csproj" -c Release --nologo 2>&1 |
+              Tee-Object -FilePath "diagnostics/$tree-build.log"
+            $buildCodes[$tree] = $LASTEXITCODE
+            if ($buildCodes[$tree] -ne 0) { $failed = $true }
+            Save-Checkpoint
+          }
+
+          if (-not $failed) {
+            foreach ($run in $sequence) {
+              $runDir = Join-Path $env:GITHUB_WORKSPACE "diagnostics/$($run.name)"
+              $trxDir = Join-Path $runDir 'trx'
+              New-Item -ItemType Directory -Force $trxDir | Out-Null
+              $entry = [ordered]@{ run = $run.name; tree = $run.tree; exitCode = $null; testCount = 0 }
+              try { $entry.before = Get-Snapshot } catch { $entry.beforeError = $_.Exception.Message; $failed = $true }
+              try {
+                dotnet test "$($run.tree)/src/Netclaw.Security.Tests/Netclaw.Security.Tests.csproj" `
+                  -c Release --no-build --no-restore --filter $filter --results-directory $trxDir `
+                  --logger "trx;LogFileName=$($run.name).trx" 2>&1 | Tee-Object (Join-Path $runDir 'console.log')
+                $entry.exitCode = $LASTEXITCODE
+              } catch {
+                $entry.exitCode = -1
+                $entry.runError = $_.Exception.Message
+              }
+              try { $entry.after = Get-Snapshot } catch { $entry.afterError = $_.Exception.Message; $failed = $true }
+              $runResults += [pscustomobject]$entry
+              Save-Checkpoint
+
+              try {
+                foreach ($file in Get-ChildItem $trxDir -Filter '*.trx' -File) {
+                  [xml]$trx = Get-Content -Raw $file.FullName
+                  foreach ($test in $trx.SelectNodes("//*[local-name()='UnitTestResult']")) {
+                    $testRows += [pscustomobject]@{
+                      run = $run.name; testName = $test.GetAttribute('testName')
+                      outcome = $test.GetAttribute('outcome'); duration = $test.GetAttribute('duration')
+                    }
+                    $runResults[-1].testCount++
+                    if ($test.GetAttribute('outcome') -ne 'Passed') { $failed = $true }
+                  }
+                }
+              } catch {
+                $runResults[-1] | Add-Member -NotePropertyName trxError -NotePropertyValue $_.Exception.Message
+                $failed = $true
+              }
+              if ($runResults[-1].testCount -ne 4 -or $runResults[-1].exitCode -ne 0) { $failed = $true }
+              Save-Checkpoint
+            }
+          }
+
+          if ($failed) { exit 1 }
+
+      - name: Upload diagnostic artifacts
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: redactor-windows-${{ github.run_id }}-${{ github.run_attempt }}
+          path: diagnostics
+          retention-days: 3
+          if-no-files-found: error
