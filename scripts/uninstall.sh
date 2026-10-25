@@ -234,6 +234,32 @@ remove_file() {
     return 0
 }
 
+# Remove a directory only when it is empty. A directory that still holds
+# operator files is reported as kept, never deleted.
+remove_dir_if_empty() {
+    local path="$1" label="$2"
+    [ -d "$path" ] || return 0
+
+    if [ -n "$(ls -A "$path" 2>/dev/null)" ]; then
+        report_kept "$label ($path)"
+        return 0
+    fi
+
+    if [ "$DRY_RUN" = true ]; then
+        echo "  would remove empty directory: $path"
+    else
+        if rmdir "$path" 2>/dev/null; then
+            echo "  removed empty directory: $path"
+        else
+            echo "  warning: could not remove empty directory $path" >&2
+            report_warning "could not remove empty directory $path"
+            return 1
+        fi
+    fi
+    report_removed "$label"
+    return 0
+}
+
 echo "Netclaw uninstaller"
 echo "  Install dir: $INSTALL_DIR"
 echo "  Netclaw home: $NETCLAW_HOME_DIR"
@@ -330,6 +356,10 @@ remove_file "$INSTALL_DIR/netclawd" "netclawd binary"
 # both are deletable here even on Windows-equivalent constraints.
 remove_file "$INSTALL_DIR/netclaw.backup" "netclaw backup"
 remove_file "$INSTALL_DIR/netclawd.backup" "netclawd backup"
+
+# Remove the install directory when it is empty. A custom --install-dir may
+# hold other files, so only an empty directory is removed.
+remove_dir_if_empty "$INSTALL_DIR" "install directory"
 
 # ── 5. Remove shell integration ──
 if [ "$SKIP_SHELL" = false ]; then
@@ -469,6 +499,9 @@ if [ "$SKIP_SHELL" = false ]; then
     # The env script is sourced by the rc block. Remove it after the block so a
     # shell never sources a missing file.
     remove_file "$ENV_SCRIPT" "env script"
+    # The installer created ENV_HOME_DIR to hold the env script. Remove it when
+    # nothing else lives there; a populated Netclaw home is kept.
+    remove_dir_if_empty "$ENV_HOME_DIR" "env script directory"
 else
     echo ""
     echo "Skipping shell integration (--skip-shell)."

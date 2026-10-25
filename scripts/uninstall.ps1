@@ -148,9 +148,12 @@ if (Test-Path -LiteralPath $InstallDir) {
 
 # ── Safety: -Purge needs confirmation ──
 if ($Purge -and -not $Yes -and -not $DryRun) {
-    $interactive = [Environment]::UserInteractive -and $Host.UI.RawUI -ne $null
-    if (-not $interactive) {
-        Write-Error "-Purge deletes $NetclawHome and needs confirmation. The session is not interactive, so the script cannot prompt. Pass -Yes to confirm, or omit -Purge to keep your data."
+    # [Environment]::UserInteractive is true for any console process, including
+    # CI, so it cannot detect a redirected stdin. IsInputRedirected can: a
+    # piped or redirected stdin means the script cannot prompt.
+    $canPrompt = -not [Console]::IsInputRedirected
+    if (-not $canPrompt) {
+        Write-Error "-Purge deletes $NetclawHome and needs confirmation. stdin is redirected, so the script cannot prompt. Pass -Yes to confirm, or omit -Purge to keep your data."
         exit 3
     }
     Write-Host "This will permanently delete:"
