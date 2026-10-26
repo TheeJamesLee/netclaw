@@ -873,8 +873,23 @@ snapshot_tree() {
 run_uninstaller() {
   local home="$1" install_dir="$2"
   shift 2
-  HOME="$home" SHELL="${SHELL:-/bin/bash}" \
+  # Pin the shell to bash so the uninstaller resolves the same rc file the
+  # installer wrote. Inheriting $SHELL would pick zsh on some macOS runners.
+  HOME="$home" SHELL="$(command -v bash)" \
     bash "$UNINSTALL_SH" --install-dir "$install_dir" "$@"
+}
+
+# Find the rc file the installer actually modified. Linux uses .bashrc;
+# macOS uses the first existing of .bash_profile, .bash_login, .profile.
+find_installed_rc() {
+  local home="$1" candidate
+  for candidate in "$home/.bashrc" "$home/.bash_profile" "$home/.bash_login" "$home/.profile"; do
+    if [ -f "$candidate" ] && grep -qF "netclaw shell setup" "$candidate" 2>/dev/null; then
+      printf '%s' "$candidate"
+      return 0
+    fi
+  done
+  return 1
 }
 
 # 10a. Round-trip: install, uninstall, and compare against the pre-install tree.
@@ -986,14 +1001,19 @@ SKIP_HOME="$WORK/uninstall-skip"
 SKIP_INSTALL="$SKIP_HOME/netclaw/bin"
 mkdir -p "$SKIP_HOME"
 printf '# pre-existing bash rc\n' > "$SKIP_HOME/.bashrc"
+printf '# pre-existing profile\n' > "$SKIP_HOME/.profile"
 run_unix_installer "$(command -v bash)" "$SKIP_HOME" "$SKIP_INSTALL" >/dev/null 2>&1
-SKIP_RC_BEFORE="$(sha256_of "$SKIP_HOME/.bashrc")"
-run_uninstaller "$SKIP_HOME" "$SKIP_INSTALL" --skip-shell >/dev/null 2>&1
-SKIP_RC_AFTER="$(sha256_of "$SKIP_HOME/.bashrc")"
-if [ "$SKIP_RC_BEFORE" = "$SKIP_RC_AFTER" ]; then
-  pass "roundtrip: --skip-shell leaves the shell profile untouched"
+if SKIP_RC="$(find_installed_rc "$SKIP_HOME")"; then
+  SKIP_RC_BEFORE="$(sha256_of "$SKIP_RC")"
+  run_uninstaller "$SKIP_HOME" "$SKIP_INSTALL" --skip-shell >/dev/null 2>&1
+  SKIP_RC_AFTER="$(sha256_of "$SKIP_RC")"
+  if [ "$SKIP_RC_BEFORE" = "$SKIP_RC_AFTER" ]; then
+    pass "roundtrip: --skip-shell leaves the shell profile untouched"
+  else
+    fail "roundtrip: --skip-shell modified the shell profile"
+  fi
 else
-  fail "roundtrip: --skip-shell modified the shell profile"
+  fail "roundtrip: could not locate the rc file for the --skip-shell test"
 fi
 
 # 10h. A duplicated comment line is fully removed.
@@ -1001,20 +1021,25 @@ DUP_HOME="$WORK/uninstall-dup"
 DUP_INSTALL="$DUP_HOME/netclaw/bin"
 mkdir -p "$DUP_HOME"
 printf '# pre-existing bash rc\n' > "$DUP_HOME/.bashrc"
+printf '# pre-existing profile\n' > "$DUP_HOME/.profile"
 run_unix_installer "$(command -v bash)" "$DUP_HOME" "$DUP_INSTALL" >/dev/null 2>&1
-# Duplicate the comment line the installer wrote.
-DUP_SOURCE_LINE="$(grep -F '. ' "$DUP_HOME/.bashrc" | head -1)"
-printf '# netclaw shell setup\n%s\n' "$DUP_SOURCE_LINE" >> "$DUP_HOME/.bashrc"
-run_uninstaller "$DUP_HOME" "$DUP_INSTALL" >/dev/null 2>&1
-if grep -qF "netclaw shell setup" "$DUP_HOME/.bashrc"; then
-  fail "roundtrip: duplicated comment line survived uninstall"
+# Duplicate the comment line the installer wrote, in whichever rc file it used.
+if DUP_RC="$(find_installed_rc "$DUP_HOME")"; then
+  DUP_SOURCE_LINE="$(grep -F '. ' "$DUP_RC" | head -1)"
+  printf '# netclaw shell setup\n%s\n' "$DUP_SOURCE_LINE" >> "$DUP_RC"
+  run_uninstaller "$DUP_HOME" "$DUP_INSTALL" >/dev/null 2>&1
+  if grep -qF "netclaw shell setup" "$DUP_RC"; then
+    fail "roundtrip: duplicated comment line survived uninstall"
+  else
+    pass "roundtrip: duplicated comment line removed"
+  fi
+  if grep -qF "# pre-existing" "$DUP_RC"; then
+    pass "roundtrip: unrelated rc line preserved after duplicate removal"
+  else
+    fail "roundtrip: unrelated rc line lost after duplicate removal"
+  fi
 else
-  pass "roundtrip: duplicated comment line removed"
-fi
-if grep -qF "# pre-existing bash rc" "$DUP_HOME/.bashrc"; then
-  pass "roundtrip: unrelated rc line preserved after duplicate removal"
-else
-  fail "roundtrip: unrelated rc line lost after duplicate removal"
+  fail "roundtrip: could not locate the rc file the installer modified"
 fi
 
 # 10i. A stray comment with no source line is not ours to remove.
