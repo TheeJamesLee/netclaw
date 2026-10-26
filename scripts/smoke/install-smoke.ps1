@@ -674,6 +674,29 @@ try {
         Fail "uninstall: sibling prefix directory was damaged (value='$($prefixAfter.Value)')"
     }
 
+    # 10k. An empty -InstallDir that is not a Netclaw install is not deleted.
+    # -InstallDir accepts any path, so "the directory is empty" is not proof
+    # that we emptied it.
+    $emptyProfile = Join-Path $Work "uninstall-empty-user"
+    $emptyInstall = Join-Path $Work "uninstall-empty-not-netclaw"
+    New-Item -ItemType Directory -Path $emptyProfile, $emptyInstall -Force | Out-Null
+    Invoke-HomeUninstall $emptyProfile $null $emptyInstall @() | Out-Null
+    if (Test-Path -LiteralPath $emptyInstall) {
+        Pass "uninstall: an already-empty install directory is not deleted"
+    } else {
+        Fail "uninstall: an already-empty install directory was deleted"
+    }
+
+    # 10l. The same guard holds when -InstallDir is the profile directory.
+    $selfProfile = Join-Path $Work "uninstall-self-user"
+    New-Item -ItemType Directory -Path $selfProfile -Force | Out-Null
+    Invoke-HomeUninstall $selfProfile $null $selfProfile @() | Out-Null
+    if (Test-Path -LiteralPath $selfProfile) {
+        Pass "uninstall: -InstallDir pointing at the profile is not deleted"
+    } else {
+        Fail "uninstall: -InstallDir pointing at the profile was deleted"
+    }
+
     # Restore the User PATH to its original state for the finally block.
     Set-UserPathRegistryState $OriginalUserPath.Exists $OriginalUserPath.Value $OriginalUserPath.Kind
 }

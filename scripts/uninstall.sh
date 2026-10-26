@@ -215,6 +215,9 @@ report_kept() { KEPT+=("$1"); }
 report_warning() { WARNINGS+=("$1"); }
 
 # Remove a file if it exists. Idempotent: a missing file is success.
+# Sets REMOVED_ANY_FILE=true when a file was actually removed, so callers can
+# tell "we emptied this directory" from "it was already empty".
+REMOVED_ANY_FILE=false
 remove_file() {
     local path="$1" label="$2"
     if [ -e "$path" ] || [ -L "$path" ]; then
@@ -229,16 +232,22 @@ remove_file() {
                 return 1
             fi
         fi
+        REMOVED_ANY_FILE=true
         report_removed "$label"
     fi
     return 0
 }
 
-# Remove a directory only when it is empty. A directory that still holds
-# operator files is reported as kept, never deleted.
-remove_dir_if_empty() {
-    local path="$1" label="$2"
+# Remove a directory only when this run emptied it. A directory that was
+# already empty is not ours to delete: --install-dir may point at any path,
+# including the operator's home directory.
+remove_dir_if_emptied() {
+    local path="$1" label="$2" emptied="$3"
     [ -d "$path" ] || return 0
+
+    if [ "$emptied" != true ]; then
+        return 0
+    fi
 
     if [ -n "$(ls -A "$path" 2>/dev/null)" ]; then
         report_kept "$label ($path)"
@@ -350,16 +359,18 @@ remove_file "$NETCLAW_HOME_DIR/config/daemon.env" "daemon environment file"
 # ── 4. Remove binaries and update leftovers ──
 echo ""
 echo "Removing binaries..."
+REMOVED_ANY_FILE=false
 remove_file "$INSTALL_DIR/netclaw" "netclaw binary"
 remove_file "$INSTALL_DIR/netclawd" "netclawd binary"
 # The updater leaves these behind. Uninstall runs outside the install dir, so
 # both are deletable here even on Windows-equivalent constraints.
 remove_file "$INSTALL_DIR/netclaw.backup" "netclaw backup"
 remove_file "$INSTALL_DIR/netclawd.backup" "netclawd backup"
+INSTALL_DIR_EMPTIED=$REMOVED_ANY_FILE
 
-# Remove the install directory when it is empty. A custom --install-dir may
-# hold other files, so only an empty directory is removed.
-remove_dir_if_empty "$INSTALL_DIR" "install directory"
+# Remove the install directory only when this run emptied it. --install-dir
+# accepts any path, so an already-empty directory is not ours to delete.
+remove_dir_if_emptied "$INSTALL_DIR" "install directory" "$INSTALL_DIR_EMPTIED"
 
 # ── 5. Remove shell integration ──
 if [ "$SKIP_SHELL" = false ]; then
@@ -498,10 +509,12 @@ if [ "$SKIP_SHELL" = false ]; then
 
     # The env script is sourced by the rc block. Remove it after the block so a
     # shell never sources a missing file.
+    REMOVED_ANY_FILE=false
     remove_file "$ENV_SCRIPT" "env script"
-    # The installer created ENV_HOME_DIR to hold the env script. Remove it when
-    # nothing else lives there; a populated Netclaw home is kept.
-    remove_dir_if_empty "$ENV_HOME_DIR" "env script directory"
+    ENV_DIR_EMPTIED=$REMOVED_ANY_FILE
+    # Remove ENV_HOME_DIR only when this run emptied it. A populated Netclaw
+    # home is kept, and an already-empty directory is not ours to delete.
+    remove_dir_if_emptied "$ENV_HOME_DIR" "env script directory" "$ENV_DIR_EMPTIED"
 else
     echo ""
     echo "Skipping shell integration (--skip-shell)."

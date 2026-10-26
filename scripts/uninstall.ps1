@@ -68,11 +68,11 @@ if ($Help) {
 # This script edits HKCU\Environment and deletes .exe files. Running it on a
 # non-Windows host would fail in confusing ways, so refuse up front.
 if (-not $IsWindows -and $PSVersionTable.PSEdition -eq 'Core') {
-    Write-Error "This script uninstalls Netclaw on Windows. On Linux or macOS, use uninstall.sh instead."
+    Write-Host "ERROR: This script uninstalls Netclaw on Windows. On Linux or macOS, use uninstall.sh instead."
     exit 2
 }
 if ($PSVersionTable.PSEdition -ne 'Core' -and -not ($env:OS -eq 'Windows_NT')) {
-    Write-Error "This script uninstalls Netclaw on Windows. On Linux or macOS, use uninstall.sh instead."
+    Write-Host "ERROR: This script uninstalls Netclaw on Windows. On Linux or macOS, use uninstall.sh instead."
     exit 2
 }
 
@@ -141,7 +141,7 @@ if (Test-Path -LiteralPath $InstallDir) {
     $installPhysical = (Get-Item -LiteralPath $InstallDir).FullName
     $cwd = (Get-Location).ProviderPath
     if ($cwd -eq $installPhysical -or $cwd.StartsWith($installPhysical + [System.IO.Path]::DirectorySeparatorChar)) {
-        Write-Error "Refusing to run from inside the install directory ($installPhysical). Change to another directory and run again."
+        Write-Host "ERROR: Refusing to run from inside the install directory ($installPhysical). Change to another directory and run again."
         exit 4
     }
 }
@@ -153,7 +153,7 @@ if ($Purge -and -not $Yes -and -not $DryRun) {
     # piped or redirected stdin means the script cannot prompt.
     $canPrompt = -not [Console]::IsInputRedirected
     if (-not $canPrompt) {
-        Write-Error "-Purge deletes $NetclawHome and needs confirmation. stdin is redirected, so the script cannot prompt. Pass -Yes to confirm, or omit -Purge to keep your data."
+        Write-Host "ERROR: -Purge deletes $NetclawHome and needs confirmation. stdin is redirected, so the script cannot prompt. Pass -Yes to confirm, or omit -Purge to keep your data."
         exit 3
     }
     Write-Host "This will permanently delete:"
@@ -171,6 +171,7 @@ if ($Purge -and -not $Yes -and -not $DryRun) {
 $Removed = New-Object System.Collections.Generic.List[string]
 $Kept = New-Object System.Collections.Generic.List[string]
 $Warnings = New-Object System.Collections.Generic.List[string]
+$InstallDirEmptied = $false
 
 function Remove-TargetFile {
     param([string]$Path, [string]$Label)
@@ -182,6 +183,7 @@ function Remove-TargetFile {
     if ($DryRun) {
         Write-Host "  would remove: $Path"
         $Removed.Add($Label)
+        $script:InstallDirEmptied = $true
         return
     }
 
@@ -189,6 +191,7 @@ function Remove-TargetFile {
         Remove-Item -LiteralPath $Path -Force -ErrorAction Stop
         Write-Host "  removed: $Path"
         $Removed.Add($Label)
+        $script:InstallDirEmptied = $true
     } catch {
         Write-Host "  warning: could not remove $Path : $_" -ForegroundColor Yellow
         $Warnings.Add("could not remove $Path")
@@ -250,7 +253,7 @@ if ($daemonRunning) {
         }
 
         if (Get-Process -Id $daemonPid -ErrorAction SilentlyContinue) {
-            Write-Error "The daemon (pid $daemonPid) did not stop within 30 seconds. Nothing was deleted. Stop it manually and run again."
+            Write-Host "ERROR: The daemon (pid $daemonPid) did not stop within 30 seconds. Nothing was deleted. Stop it manually and run again."
             exit 1
         }
         Write-Host "  daemon stopped (pid $daemonPid)"
@@ -270,9 +273,9 @@ Remove-TargetFile (Join-Path $InstallDir "netclawd.exe") "netclawd binary"
 Remove-TargetFile (Join-Path $InstallDir "netclaw.exe.backup") "netclaw backup"
 Remove-TargetFile (Join-Path $InstallDir "netclawd.exe.backup") "netclawd backup"
 
-# Remove the install directory when it is empty. A custom -InstallDir may hold
-# other files, so only delete it when nothing remains.
-if (-not $DryRun -and (Test-Path -LiteralPath $InstallDir)) {
+# Remove the install directory only when this run emptied it. -InstallDir
+# accepts any path, so an already-empty directory is not ours to delete.
+if (-not $DryRun -and $InstallDirEmptied -and (Test-Path -LiteralPath $InstallDir)) {
     $remaining = @(Get-ChildItem -LiteralPath $InstallDir -Force -ErrorAction SilentlyContinue)
     if ($remaining.Count -eq 0) {
         try {

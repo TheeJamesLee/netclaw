@@ -855,12 +855,13 @@ echo ""
 echo "=== uninstall round-trip ==="
 
 # Snapshot every file under a directory as "path sha256", sorted. Directories
-# are included so an empty leftover directory is visible.
+# are included so an empty leftover directory is visible. BSD sort (macOS) has
+# no -z flag, so paths are newline-delimited; the test tree has no newlines.
 snapshot_tree() {
   local root="$1"
-  ( cd "$root" && find . -mindepth 1 \( -type f -o -type d \) -print0 \
-      | sort -z \
-      | while IFS= read -r -d '' entry; do
+  ( cd "$root" && find . -mindepth 1 \( -type f -o -type d \) -print \
+      | LC_ALL=C sort \
+      | while IFS= read -r entry; do
           if [ -f "$entry" ]; then
             printf '%s %s\n' "$entry" "$(sha256_of "$entry")"
           else
@@ -1041,6 +1042,42 @@ if [ "$CWD_EXIT" -eq 4 ]; then
   pass "roundtrip: refuses to run from inside the install directory"
 else
   fail "roundtrip: cwd guard exited $CWD_EXIT (expected 4)"
+fi
+
+# 10k. An empty --install-dir that is not a Netclaw install is not deleted.
+# --install-dir accepts any path, so "the directory is empty" is not proof
+# that we emptied it. Deleting it would destroy an unrelated directory.
+EMPTY_HOME="$WORK/uninstall-empty"
+EMPTY_INSTALL="$EMPTY_HOME/not-a-netclaw-install"
+mkdir -p "$EMPTY_INSTALL"
+run_uninstaller "$EMPTY_HOME" "$EMPTY_INSTALL" >/dev/null 2>&1
+if [ -d "$EMPTY_INSTALL" ]; then
+  pass "roundtrip: an already-empty install directory is not deleted"
+else
+  fail "roundtrip: an already-empty install directory was deleted"
+fi
+
+# 10l. The same guard holds when --install-dir is the home directory itself.
+SELF_HOME="$WORK/uninstall-self"
+mkdir -p "$SELF_HOME"
+run_uninstaller "$SELF_HOME" "$SELF_HOME" >/dev/null 2>&1
+if [ -d "$SELF_HOME" ]; then
+  pass "roundtrip: --install-dir pointing at HOME is not deleted"
+else
+  fail "roundtrip: --install-dir pointing at HOME was deleted"
+fi
+
+# 10m. A real install still removes its own now-empty directory.
+CLEAN_HOME="$WORK/uninstall-clean"
+CLEAN_INSTALL="$CLEAN_HOME/netclaw/bin"
+mkdir -p "$CLEAN_HOME"
+printf '# pre-existing bash rc\n' > "$CLEAN_HOME/.bashrc"
+run_unix_installer "$(command -v bash)" "$CLEAN_HOME" "$CLEAN_INSTALL" >/dev/null 2>&1
+run_uninstaller "$CLEAN_HOME" "$CLEAN_INSTALL" >/dev/null 2>&1
+if [ ! -d "$CLEAN_INSTALL" ]; then
+  pass "roundtrip: a real install removes its own emptied directory"
+else
+  fail "roundtrip: a real install left its emptied directory behind"
 fi
 
 # ── Summary ──────────────────────────────────────────────────────────────────
