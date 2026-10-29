@@ -117,6 +117,7 @@ public static class ToolArgumentHelper
         map["timeout"] = "_timeout_seconds";
         map["rational"] = "_rationale";
         map["rationalle"] = "_rationale";
+        map["r_rationale"] = "_rationale";
         return map;
     }
 
