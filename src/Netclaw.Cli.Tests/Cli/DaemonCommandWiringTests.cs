@@ -919,6 +919,38 @@ public sealed class DaemonCommandWiringTests : IDisposable
     }
 
     [Fact]
+    public async Task Status_PrintsOneMessage_AndExitsNonZero_WhenTheLocalConfigCannotBeRead()
+    {
+        Directory.CreateDirectory(Path.Combine(ScratchHome, "config"));
+        File.WriteAllText(Path.Combine(ScratchHome, "config", "netclaw.json"), "{\"configVersion\":1,\"configVersion\":1}");
+        using var lockHolder = HoldDaemonLock(ScratchHome);
+
+        var (exitCode, stdout, stderr) = await RunWithStreamsAsync(ScratchHome, ["daemon", "status"]);
+
+        Assert.Equal(1, exitCode);
+        var line = Assert.Single(stdout.Split('\n', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries));
+        Assert.Contains("address cannot be determined", line);
+        Assert.DoesNotContain("Daemon is running", stdout);
+        Assert.Equal(string.Empty, stderr);
+    }
+
+    [Fact]
+    public async Task Status_NamesSecretsJson_WhenThatFileCannotBeRead()
+    {
+        Directory.CreateDirectory(Path.Combine(ScratchHome, "config"));
+        File.WriteAllText(Path.Combine(ScratchHome, "config", "netclaw.json"), "{}");
+        File.WriteAllText(Path.Combine(ScratchHome, "config", "secrets.json"), "{not json");
+        using var lockHolder = HoldDaemonLock(ScratchHome);
+
+        var (exitCode, stdout, _) = await RunWithStreamsAsync(ScratchHome, ["daemon", "status"]);
+
+        Assert.Equal(1, exitCode);
+        Assert.Contains("address cannot be determined", stdout);
+        Assert.Contains("secrets.json", stdout);
+        Assert.DoesNotContain("netclaw.json", stdout);
+    }
+
+    [Fact]
     public async Task Status_ExitsZero_WhenTheProcessRunsAndReadinessAnswers()
     {
         var port = FreePort();

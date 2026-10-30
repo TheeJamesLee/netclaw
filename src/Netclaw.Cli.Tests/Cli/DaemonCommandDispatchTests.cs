@@ -71,4 +71,39 @@ public sealed class DaemonCommandDispatchTests
         // itself is normalized away before this check runs — none should be double-guarded here.
         Assert.False(DaemonCommandDispatch.ShouldShowHelpInsteadOfExecuting(verb, ["daemon", verb, "--help"]));
     }
+
+    [Fact]
+    public void FormatAddressUnknown_is_one_coherent_line_with_the_pid()
+    {
+        var message = DaemonCommandDispatch.FormatAddressUnknown(
+            new DaemonStatus(IsRunning: true, Pid: 4242, Message: "Daemon running (PID 4242, uptime 5m)."));
+
+        Assert.DoesNotContain("\n", message);
+        Assert.Contains("PID 4242", message);
+        Assert.Contains("address cannot be determined", message);
+        Assert.Contains("readiness was not checked", message);
+        Assert.Contains("NETCLAW_* settings", message);
+    }
+
+    [Fact]
+    public void FormatAddressUnknown_omits_the_pid_when_the_pid_file_is_missing()
+    {
+        var message = DaemonCommandDispatch.FormatAddressUnknown(
+            new DaemonStatus(IsRunning: true, Pid: null, Message: "Daemon is running (PID file missing)."));
+
+        Assert.DoesNotContain("(PID", message);
+        Assert.Contains("PID file is missing", message);
+    }
+
+    [Fact]
+    public void FormatAddressUnknown_includes_uptime_and_the_given_reason_and_fix()
+    {
+        var message = DaemonCommandDispatch.FormatAddressUnknown(
+            new DaemonStatus(IsRunning: true, Pid: 7, Message: "m", Uptime: "5m"),
+            "Couldn't read secrets.json: bad.", "Fix the JSON in secrets.json.");
+
+        Assert.Contains("(PID 7, uptime 5m)", message);
+        Assert.Contains("Couldn't read secrets.json: bad. Fix the JSON in secrets.json.", message);
+        Assert.DoesNotContain("NETCLAW_*", message);
+    }
 }
