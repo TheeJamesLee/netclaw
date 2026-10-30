@@ -112,11 +112,7 @@ public static class ToolArgumentHelper
     {
         var map = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
         foreach (var canonical in ToolCallMeta.MetaFieldNames)
-            map[NormalizeKey(canonical)] = canonical;
-
-        //map["timeout"] = "_timeout_seconds";
-        //map["rational"] = "_rationale";
-        //map["rationalle"] = "_rationale";
+            map[NormalizeKey(canonical)] = canonical;            
         return map;
     }
 
