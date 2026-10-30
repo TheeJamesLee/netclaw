@@ -107,7 +107,8 @@ public sealed class DaemonPathEnvironmentFileTests : IDisposable
         var unit = DaemonManager.BuildDaemonUnitContent(
             "/opt/netclaw/netclawd",
             "/opt/netclaw/netclaw",
-            "/home/u/.netclaw/config/daemon.env");
+            "/home/u/.netclaw/config/daemon.env",
+            "/home/u/.netclaw");
 
         Assert.Contains("EnvironmentFile=-/home/u/.netclaw/config/daemon.env", unit, StringComparison.Ordinal);
         Assert.DoesNotContain("Environment=PATH=", unit, StringComparison.Ordinal);
@@ -122,6 +123,14 @@ public sealed class DaemonPathEnvironmentFileTests : IDisposable
             $"TimeoutStopSec={(int)DaemonConfig.SystemdTimeoutStopSec.TotalSeconds}",
             unit,
             StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void BuildDaemonUnitContent_NamesTheHome()
+    {
+        var unit = DaemonManager.BuildDaemonUnitContent("/opt/netclaw/netclawd", "/opt/netclaw/netclaw", "/x/daemon.env", "/srv/netclaw");
+
+        Assert.Contains($"Environment=NETCLAW_HOME={Path.GetFullPath("/srv/netclaw")}", unit, StringComparison.Ordinal);
     }
 
     [Fact]

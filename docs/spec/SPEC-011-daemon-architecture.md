@@ -228,8 +228,8 @@ Start it with: netclaw daemon start
 
 `netclaw daemon start` spawns the daemon as a detached background process.
 The daemon writes its PID to `~/.netclaw/netclaw.pid` for lifecycle management.
-When an installed Linux systemd user unit owns the daemon, `start` runs
-`systemctl --user start netclaw.service` instead, and it reports "Daemon already
+When an installed Linux systemd user unit serves this home (see Service Registration),
+`start` runs `systemctl --user start netclaw.service` instead, and it reports "Daemon already
 running" without touching the unit when a detached daemon already holds the home
 (the unit's daemon would only loop on the singleton lock).
 
@@ -251,11 +251,9 @@ The unit serves a home when it has a main process and that process's own
 `EnvironmentFile=` alike; absent means the default home) is that home, links
 resolved. If the environment cannot be read, a `MainPID` equal to the home's
 daemon PID counts. When the unit has no main process (the crash-loop window), the
-unit's `Environment` property decides: no `NETCLAW_HOME` means the default home.
-A unit whose `NETCLAW_HOME` comes only from an `EnvironmentFile`, sampled at an
-instant when it has no main process, is therefore treated as serving the default
-home. For a home the unit does not serve, `start` and `stop` act on that home's
-own daemon process and never on the unit.
+unit file decides, as `start` does: the home that the file names is the one it serves.
+For a home the unit does not serve,
+`start` and `stop` act on that home's own daemon process and never on the unit.
 
 A direct `stop` sends a signal only to a PID that is shown to serve the home of
 the command (capability spec `daemon-lifecycle`, change
@@ -371,6 +369,7 @@ ExecStop=/path/to/netclaw daemon stop
 Restart=always
 RestartSec=5
 Environment=DOTNET_ENVIRONMENT=Production
+Environment="NETCLAW_HOME=/home/you/.netclaw"
 EnvironmentFile=-/home/you/.netclaw/config/daemon.env
 
 [Install]
@@ -379,6 +378,24 @@ WantedBy=default.target
 
 No sudo required. Uses `systemctl --user enable netclaw` and
 `loginctl enable-linger $USER` to survive user logout.
+
+**Custom home.** `install` always writes `NETCLAW_HOME` with the absolute home of the CLI that ran
+it, so `NETCLAW_HOME=/srv/netclaw netclaw daemon install` installs a unit that serves `/srv/netclaw`,
+and its `daemon.env` lives in that home. The home that a unit file serves is resolved as systemd does:
+the last `Environment=` assignment of `NETCLAW_HOME`, overridden by the `NETCLAW_HOME` in the
+`EnvironmentFile=` it references (a missing file is fine); absent or blank means the default home. So a
+unit from an earlier release that has no `NETCLAW_HOME` but whose `daemon.env` sets one serves that home.
+Known limit: drop-ins (`systemctl --user edit`) are not read. The `daemon.env` reader also skips systemd's backslash escapes, continuation lines, and
+all but the first `EnvironmentFile=` line. The value is expanded as the daemon expands it (`~`, `$HOME`). A value that is still not an absolute
+path, or a unit that cannot be read, makes `start`/`stop`/`update` report that they cannot tell which
+home the unit serves, and leave the unit alone, but only when the unit's home decides the answer (the
+unit is active or enabled, or has no main process to inspect); an inactive unit never blocks a home. There is one unit per
+user. When the installed unit serves another home, `install` and `uninstall` refuse, write nothing, and
+name that home: run `daemon uninstall` for it first. A reinstall from the home that the unit serves
+refreshes the unit. `install` also refuses, before writing, a home, install directory or
+`daemon.env` path that holds whitespace, a quote, a backslash or `%`: the unit holds these paths
+unquoted, and systemd would split or rewrite them. `start`, `stop` and `update` use the
+unit for the home it serves and the home's own daemon process for every other home.
 
 **Shell-tool PATH.** A systemd `--user` service starts with a sanitized,
 non-interactive environment that does not inherit the operator's login-shell
