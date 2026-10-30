@@ -25,6 +25,7 @@ unset NETCLAW_HOME
 
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 INSTALL_SH="$ROOT_DIR/scripts/install.sh"
+UNINSTALL_SH="$ROOT_DIR/scripts/uninstall.sh"
 MANIFEST_GEN="$ROOT_DIR/feeds/scripts/generate-release-manifest.sh"
 VERSION="0.0.0"          # stable → latest
 BETA_VERSION="0.0.1-beta1"  # prerelease → latest-prerelease
@@ -77,6 +78,8 @@ sha256_of() {
   fi
 }
 size_of() { stat -c%s "$1" 2>/dev/null || stat -f%z "$1"; }
+# Octal permission bits. GNU stat (Linux) and BSD stat (macOS) disagree on flags.
+file_mode() { stat -c%a "$1" 2>/dev/null || stat -f%Lp "$1"; }
 indent() { while IFS= read -r line || [ -n "$line" ]; do printf '    %s\n' "$line"; done; }
 
 # ── 1. Stand-in binaries ─────────────────────────────────────────────────────
@@ -843,6 +846,284 @@ if echo "$unknown_out" | grep -qF "$UNKNOWN_INSTALL_PHYSICAL" \
   pass "unknown: guidance is shell-neutral and no shell files are created"
 else
   fail "unknown: guidance is shell-specific or shell files were created"
+fi
+
+# ── 10. Uninstall round-trip ──────────────────────────────────────────────────
+# The highest-value test: install into a throwaway HOME, snapshot the tree,
+# uninstall, snapshot again, and assert the tree is restored. A test that only
+# checks "the files I expected are gone" misses the case where uninstall
+# deletes the right file but damages the shell profile.
+echo ""
+echo "=== uninstall round-trip ==="
+
+# Snapshot every file under a directory as "path sha256", sorted. Directories
+# are included so an empty leftover directory is visible. BSD sort (macOS) has
+# no -z flag, so paths are newline-delimited; the test tree has no newlines.
+snapshot_tree() {
+  local root="$1"
+  ( cd "$root" && find . -mindepth 1 \( -type f -o -type d \) -print \
+      | LC_ALL=C sort \
+      | while IFS= read -r entry; do
+          if [ -f "$entry" ]; then
+            printf '%s %s\n' "$entry" "$(sha256_of "$entry")"
+          else
+            printf '%s DIR\n' "$entry"
+          fi
+        done )
+}
+
+run_uninstaller() {
+  local home="$1" install_dir="$2"
+  shift 2
+  # Pin the shell to bash so the uninstaller resolves the same rc file the
+  # installer wrote. Inheriting $SHELL would pick zsh on some macOS runners.
+  HOME="$home" SHELL="$(command -v bash)" \
+    bash "$UNINSTALL_SH" --install-dir "$install_dir" "$@"
+}
+
+# Find the rc file the installer actually modified. Linux uses .bashrc;
+# macOS uses the first existing of .bash_profile, .bash_login, .profile.
+find_installed_rc() {
+  local home="$1" candidate
+  for candidate in "$home/.bashrc" "$home/.bash_profile" "$home/.bash_login" "$home/.profile"; do
+    if [ -f "$candidate" ] && grep -qF "netclaw shell setup" "$candidate" 2>/dev/null; then
+      printf '%s' "$candidate"
+      return 0
+    fi
+  done
+  return 1
+}
+
+# 10a. Round-trip: install, uninstall, and compare against the pre-install tree.
+RT_HOME="$WORK/roundtrip"
+RT_INSTALL="$RT_HOME/netclaw/bin"
+mkdir -p "$RT_HOME/netclaw"
+printf '# pre-existing bash rc\n' > "$RT_HOME/.bashrc"
+printf '# pre-existing profile\n' > "$RT_HOME/.profile"
+
+BEFORE_TREE="$(snapshot_tree "$RT_HOME")"
+
+if run_unix_installer "$(command -v bash)" "$RT_HOME" "$RT_INSTALL" >/dev/null 2>&1; then
+  pass "roundtrip: install succeeded"
+else
+  fail "roundtrip: install failed"
+fi
+
+INSTALLED_TREE="$(snapshot_tree "$RT_HOME")"
+if [ "$BEFORE_TREE" != "$INSTALLED_TREE" ]; then
+  pass "roundtrip: install changed the tree"
+else
+  fail "roundtrip: install changed nothing"
+fi
+
+if run_uninstaller "$RT_HOME" "$RT_INSTALL" >/dev/null 2>&1; then
+  pass "roundtrip: uninstall succeeded"
+else
+  fail "roundtrip: uninstall failed"
+fi
+
+AFTER_TREE="$(snapshot_tree "$RT_HOME")"
+if [ "$BEFORE_TREE" = "$AFTER_TREE" ]; then
+  pass "roundtrip: tree restored byte-for-byte"
+else
+  fail "roundtrip: tree not restored"
+  echo "  --- expected ---"
+  printf '%s\n' "$BEFORE_TREE" | indent
+  echo "  --- actual ---"
+  printf '%s\n' "$AFTER_TREE" | indent
+fi
+
+# 10b. The data directory survives a standard uninstall.
+RT_DATA="$RT_HOME/.netclaw/config/netclaw.json"
+mkdir -p "$(dirname "$RT_DATA")"
+printf '{"configVersion":1}\n' > "$RT_DATA"
+run_uninstaller "$RT_HOME" "$RT_INSTALL" >/dev/null 2>&1
+if [ -f "$RT_DATA" ]; then
+  pass "roundtrip: standard uninstall keeps the data directory"
+else
+  fail "roundtrip: standard uninstall deleted the data directory"
+fi
+
+# 10c. --purge removes it.
+run_uninstaller "$RT_HOME" "$RT_INSTALL" --purge --yes >/dev/null 2>&1
+if [ ! -e "$RT_HOME/.netclaw" ]; then
+  pass "roundtrip: --purge removes the data directory"
+else
+  fail "roundtrip: --purge left the data directory"
+fi
+
+# 10d. Idempotency: a second uninstall exits 0.
+if run_uninstaller "$RT_HOME" "$RT_INSTALL" >/dev/null 2>&1; then
+  pass "roundtrip: second uninstall exits 0"
+else
+  fail "roundtrip: second uninstall failed"
+fi
+
+# 10e. --dry-run changes nothing.
+DRY_HOME="$WORK/dryrun"
+DRY_INSTALL="$DRY_HOME/netclaw/bin"
+mkdir -p "$DRY_HOME"
+printf '# pre-existing bash rc\n' > "$DRY_HOME/.bashrc"
+run_unix_installer "$(command -v bash)" "$DRY_HOME" "$DRY_INSTALL" >/dev/null 2>&1
+DRY_BEFORE="$(snapshot_tree "$DRY_HOME")"
+run_uninstaller "$DRY_HOME" "$DRY_INSTALL" --dry-run >/dev/null 2>&1
+DRY_AFTER="$(snapshot_tree "$DRY_HOME")"
+if [ "$DRY_BEFORE" = "$DRY_AFTER" ]; then
+  pass "roundtrip: --dry-run changes nothing"
+else
+  fail "roundtrip: --dry-run changed the tree"
+fi
+
+# 10f. --purge without --yes and no terminal refuses and preserves data.
+REFUSE_HOME="$WORK/refuse"
+REFUSE_INSTALL="$REFUSE_HOME/netclaw/bin"
+mkdir -p "$REFUSE_HOME"
+printf '# pre-existing bash rc\n' > "$REFUSE_HOME/.bashrc"
+run_unix_installer "$(command -v bash)" "$REFUSE_HOME" "$REFUSE_INSTALL" >/dev/null 2>&1
+mkdir -p "$REFUSE_HOME/.netclaw/config"
+printf '{"configVersion":1}\n' > "$REFUSE_HOME/.netclaw/config/netclaw.json"
+# set -e would abort on the non-zero exit, so capture it inside a subshell
+# that always succeeds.
+REFUSE_EXIT=0
+HOME="$REFUSE_HOME" SHELL=/bin/bash bash "$UNINSTALL_SH" \
+  --install-dir "$REFUSE_INSTALL" --purge </dev/null >/dev/null 2>&1 || REFUSE_EXIT=$?
+if [ "$REFUSE_EXIT" -eq 3 ]; then
+  pass "roundtrip: --purge without --yes exits 3"
+else
+  fail "roundtrip: --purge without --yes exited $REFUSE_EXIT (expected 3)"
+fi
+if [ -f "$REFUSE_HOME/.netclaw/config/netclaw.json" ]; then
+  pass "roundtrip: refused purge preserved the data directory"
+else
+  fail "roundtrip: refused purge deleted the data directory"
+fi
+
+# 10f-2. Uninstall preserves the shell profile's file mode. The uninstaller
+# rewrites the rc file through a mktemp temp file, which is created 0600; without
+# an explicit chmod the user's ~/.bashrc silently becomes 0600. The tree
+# snapshot compares content only, so this needs its own assertion.
+MODE_HOME="$WORK/uninstall-mode"
+MODE_INSTALL="$MODE_HOME/netclaw/bin"
+mkdir -p "$MODE_HOME"
+printf '# pre-existing bash rc\n' > "$MODE_HOME/.bashrc"
+chmod 644 "$MODE_HOME/.bashrc"
+MODE_BEFORE="$(file_mode "$MODE_HOME/.bashrc")"
+run_unix_installer "$(command -v bash)" "$MODE_HOME" "$MODE_INSTALL" >/dev/null 2>&1
+run_uninstaller "$MODE_HOME" "$MODE_INSTALL" >/dev/null 2>&1
+MODE_AFTER="$(file_mode "$MODE_HOME/.bashrc")"
+if [ -n "$MODE_BEFORE" ] && [ "$MODE_BEFORE" = "$MODE_AFTER" ]; then
+  pass "roundtrip: uninstall preserves the shell profile mode ($MODE_AFTER)"
+else
+  fail "roundtrip: uninstall changed the shell profile mode ($MODE_BEFORE -> $MODE_AFTER)"
+fi
+
+# 10g. --skip-shell leaves the shell profile untouched.
+SKIP_HOME="$WORK/uninstall-skip"
+SKIP_INSTALL="$SKIP_HOME/netclaw/bin"
+mkdir -p "$SKIP_HOME"
+printf '# pre-existing bash rc\n' > "$SKIP_HOME/.bashrc"
+printf '# pre-existing profile\n' > "$SKIP_HOME/.profile"
+run_unix_installer "$(command -v bash)" "$SKIP_HOME" "$SKIP_INSTALL" >/dev/null 2>&1
+if SKIP_RC="$(find_installed_rc "$SKIP_HOME")"; then
+  SKIP_RC_BEFORE="$(sha256_of "$SKIP_RC")"
+  run_uninstaller "$SKIP_HOME" "$SKIP_INSTALL" --skip-shell >/dev/null 2>&1
+  SKIP_RC_AFTER="$(sha256_of "$SKIP_RC")"
+  if [ "$SKIP_RC_BEFORE" = "$SKIP_RC_AFTER" ]; then
+    pass "roundtrip: --skip-shell leaves the shell profile untouched"
+  else
+    fail "roundtrip: --skip-shell modified the shell profile"
+  fi
+else
+  fail "roundtrip: could not locate the rc file for the --skip-shell test"
+fi
+
+# 10h. A duplicated comment line is fully removed.
+DUP_HOME="$WORK/uninstall-dup"
+DUP_INSTALL="$DUP_HOME/netclaw/bin"
+mkdir -p "$DUP_HOME"
+printf '# pre-existing bash rc\n' > "$DUP_HOME/.bashrc"
+printf '# pre-existing profile\n' > "$DUP_HOME/.profile"
+run_unix_installer "$(command -v bash)" "$DUP_HOME" "$DUP_INSTALL" >/dev/null 2>&1
+# Duplicate the comment line the installer wrote, in whichever rc file it used.
+if DUP_RC="$(find_installed_rc "$DUP_HOME")"; then
+  DUP_SOURCE_LINE="$(grep -F '. ' "$DUP_RC" | head -1)"
+  printf '# netclaw shell setup\n%s\n' "$DUP_SOURCE_LINE" >> "$DUP_RC"
+  run_uninstaller "$DUP_HOME" "$DUP_INSTALL" >/dev/null 2>&1
+  if grep -qF "netclaw shell setup" "$DUP_RC"; then
+    fail "roundtrip: duplicated comment line survived uninstall"
+  else
+    pass "roundtrip: duplicated comment line removed"
+  fi
+  if grep -qF "# pre-existing" "$DUP_RC"; then
+    pass "roundtrip: unrelated rc line preserved after duplicate removal"
+  else
+    fail "roundtrip: unrelated rc line lost after duplicate removal"
+  fi
+else
+  fail "roundtrip: could not locate the rc file the installer modified"
+fi
+
+# 10i. A stray comment with no source line is not ours to remove.
+STRAY_HOME="$WORK/uninstall-stray"
+STRAY_INSTALL="$STRAY_HOME/netclaw/bin"
+mkdir -p "$STRAY_HOME"
+printf '# pre-existing bash rc\n# netclaw shell setup\n# unrelated line\n' > "$STRAY_HOME/.bashrc"
+run_uninstaller "$STRAY_HOME" "$STRAY_INSTALL" >/dev/null 2>&1
+if grep -qF "netclaw shell setup" "$STRAY_HOME/.bashrc"; then
+  pass "roundtrip: stray comment preserved"
+else
+  fail "roundtrip: stray comment removed"
+fi
+
+# 10j. The uninstaller refuses to run from inside the install directory.
+CWD_HOME="$WORK/uninstall-cwd"
+CWD_INSTALL="$CWD_HOME/netclaw/bin"
+mkdir -p "$CWD_HOME"
+printf '# pre-existing bash rc\n' > "$CWD_HOME/.bashrc"
+run_unix_installer "$(command -v bash)" "$CWD_HOME" "$CWD_INSTALL" >/dev/null 2>&1
+CWD_EXIT=0
+( cd "$CWD_INSTALL" && HOME="$CWD_HOME" SHELL=/bin/bash \
+    bash "$UNINSTALL_SH" --install-dir "$CWD_INSTALL" >/dev/null 2>&1 ) || CWD_EXIT=$?
+if [ "$CWD_EXIT" -eq 4 ]; then
+  pass "roundtrip: refuses to run from inside the install directory"
+else
+  fail "roundtrip: cwd guard exited $CWD_EXIT (expected 4)"
+fi
+
+# 10k. An empty --install-dir that is not a Netclaw install is not deleted.
+# --install-dir accepts any path, so "the directory is empty" is not proof
+# that we emptied it. Deleting it would destroy an unrelated directory.
+EMPTY_HOME="$WORK/uninstall-empty"
+EMPTY_INSTALL="$EMPTY_HOME/not-a-netclaw-install"
+mkdir -p "$EMPTY_INSTALL"
+run_uninstaller "$EMPTY_HOME" "$EMPTY_INSTALL" >/dev/null 2>&1
+if [ -d "$EMPTY_INSTALL" ]; then
+  pass "roundtrip: an already-empty install directory is not deleted"
+else
+  fail "roundtrip: an already-empty install directory was deleted"
+fi
+
+# 10l. The same guard holds when --install-dir is the home directory itself.
+SELF_HOME="$WORK/uninstall-self"
+mkdir -p "$SELF_HOME"
+run_uninstaller "$SELF_HOME" "$SELF_HOME" >/dev/null 2>&1
+if [ -d "$SELF_HOME" ]; then
+  pass "roundtrip: --install-dir pointing at HOME is not deleted"
+else
+  fail "roundtrip: --install-dir pointing at HOME was deleted"
+fi
+
+# 10m. A real install still removes its own now-empty directory.
+CLEAN_HOME="$WORK/uninstall-clean"
+CLEAN_INSTALL="$CLEAN_HOME/netclaw/bin"
+mkdir -p "$CLEAN_HOME"
+printf '# pre-existing bash rc\n' > "$CLEAN_HOME/.bashrc"
+run_unix_installer "$(command -v bash)" "$CLEAN_HOME" "$CLEAN_INSTALL" >/dev/null 2>&1
+run_uninstaller "$CLEAN_HOME" "$CLEAN_INSTALL" >/dev/null 2>&1
+if [ ! -d "$CLEAN_INSTALL" ]; then
+  pass "roundtrip: a real install removes its own emptied directory"
+else
+  fail "roundtrip: a real install left its emptied directory behind"
 fi
 
 # ── Summary ──────────────────────────────────────────────────────────────────
