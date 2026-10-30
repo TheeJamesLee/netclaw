@@ -88,6 +88,9 @@ public sealed class ToolAudienceProfilesDoctorCheck(NetclawPaths paths) : IDocto
 
         CheckUnusableOverrideKeys(toolConfig.AudienceProfiles, warnings);
         warnings.AddRange(FindValuelessOverrideKeys(root));
+        // A null or {} grant list binds as an empty list, which removes every grant. Only the daemon
+        // reads the other loader warnings, so doctor repeats this one.
+        warnings.AddRange(policyConfiguration.ToolWarnings.Where(static w => w.EndsWith(ToolConfig.EmptyListWarningSuffix, StringComparison.Ordinal)));
         warnings.AddRange(policyConfiguration.ToolNotices);
         CheckExplicitPersonalShellAuto(toolConfig, policyConfiguration.Defaults, warnings);
         CheckMissingToolOutputRead(toolConfig.AudienceProfiles, warnings);
@@ -417,7 +420,7 @@ public sealed class ToolAudienceProfilesDoctorCheck(NetclawPaths paths) : IDocto
         return found;
     }
 
-    // A key with a null, {} or [] value carries no mode and is ignored. A key that contains a colon
+    // A key with a null, "", {} or [] value carries no mode and is ignored. A key that contains a colon
     // is reported by FindColonOverrideKeys.
     private static List<string> FindValuelessOverrideKeys(JsonObject root)
     {
@@ -432,7 +435,8 @@ public sealed class ToolAudienceProfilesDoctorCheck(NetclawPaths paths) : IDocto
 
                 foreach (var (key, value) in entries.OrderBy(static pair => pair.Key, StringComparer.Ordinal))
                 {
-                    var valueless = value is null or JsonArray { Count: 0 } or JsonObject { Count: 0 };
+                    var valueless = value is null or JsonArray { Count: 0 } or JsonObject { Count: 0 }
+                        || value is JsonValue text && text.TryGetValue<string>(out var str) && str.Length == 0;
                     if (valueless && !key.Contains(':', StringComparison.Ordinal))
                     {
                         found.Add(

@@ -8,6 +8,8 @@ using Netclaw.Cli;
 using Netclaw.Cli.Doctor;
 using Netclaw.Configuration;
 using System.Text.Json;
+using System.Text.Json.Nodes;
+using Netclaw.Cli.Json;
 using Xunit;
 
 namespace Netclaw.Cli.Tests.Doctor;
@@ -937,6 +939,166 @@ public sealed class ConfigSchemaDoctorCheckTests : IDisposable
 
         Assert.Equal(DoctorSeverity.Error, result.Severity);
         Assert.Contains("MaxToolCallsPerTurn", result.Message, StringComparison.OrdinalIgnoreCase);
+    }
+
+    [Theory]
+    [InlineData("ToolOverrides", "shell_execute", "null")]
+    [InlineData("ToolOverrides", "shell_execute", "{}")]
+    [InlineData("ToolOverrides", "shell_execute", "[]")]
+    [InlineData("ToolOverrides", "shell_execute", "\"\"")]
+    [InlineData("McpServerDefaults", "notion", "null")]
+    [InlineData("McpServerDefaults", "notion", "{}")]
+    [InlineData("McpServerDefaults", "notion", "[]")]
+    [InlineData("McpServerDefaults", "notion", "\"\"")]
+    public async Task ReturnsPass_WhenApprovalPolicyMapHasValuelessEntry(string map, string key, string value)
+    {
+        // The config loader drops a null, "", {} or [] entry with a warning, so the schema check must not fail it.
+        var result = await RunSchemaCheck($$"""
+            { "configVersion": 1, "Tools": { "AudienceProfiles": { "Team": { "ApprovalPolicy": { "{{map}}": { "{{key}}": {{value}} } } } } } }
+            """);
+
+        Assert.Equal(DoctorSeverity.Pass, result.Severity);
+    }
+
+    [Theory]
+    [InlineData("ToolOverrides")]
+    [InlineData("McpServerDefaults")]
+    public async Task ReturnsPass_WhenApprovalPolicyMapIsNull(string map)
+    {
+        var result = await RunSchemaCheck($$"""
+            { "configVersion": 1, "Tools": { "AudienceProfiles": { "Team": { "ApprovalPolicy": { "{{map}}": null } } } } }
+            """);
+
+        Assert.Equal(DoctorSeverity.Pass, result.Severity);
+    }
+
+    [Theory]
+    [InlineData("{ \"AudienceProfiles\": { \"Team\": { \"AllowedTools\": VALUE } } }")]
+    [InlineData("{ \"AudienceProfiles\": { \"Team\": { \"AllowedMcpServers\": VALUE } } }")]
+    [InlineData("{ \"AudienceProfiles\": { \"Team\": { \"ReadFiles\": { \"Roots\": VALUE } } } }")]
+    [InlineData("{ \"AudienceProfiles\": { \"Team\": { \"WriteFiles\": { \"Roots\": VALUE } } } }")]
+    [InlineData("{ \"AudienceProfiles\": { \"Team\": { \"AttachFiles\": { \"Roots\": VALUE } } } }")]
+    [InlineData("{ \"AudienceProfiles\": { \"Team\": { \"ChannelAttachments\": { \"AllowedCategories\": VALUE } } } }")]
+    [InlineData("{ \"AudienceProfiles\": { \"GlobalReadRoots\": VALUE } }")]
+    [InlineData("{ \"WebFetch\": { \"HttpAllowList\": VALUE } }")]
+    public async Task DefaultedLists_AcceptNullEmptyObjectEmptyArrayAndEmptyString_ButNotAScalar(string toolsTemplate)
+    {
+        foreach (var value in new[] { "null", "{}", "[]", "\"\"" })
+        {
+            var result = await RunSchemaCheck(
+                "{ \"configVersion\": 1, \"Tools\": " + toolsTemplate.Replace("VALUE", value, StringComparison.Ordinal) + " }");
+            Assert.True(result.Severity == DoctorSeverity.Pass, $"{value} in {toolsTemplate}: {result.Message}");
+        }
+
+        var scalar = await RunSchemaCheck(
+            "{ \"configVersion\": 1, \"Tools\": " + toolsTemplate.Replace("VALUE", "\"file_read\"", StringComparison.Ordinal) + " }");
+        Assert.Equal(DoctorSeverity.Error, scalar.Severity);
+        Assert.Contains("array", scalar.Message, StringComparison.OrdinalIgnoreCase);
+    }
+
+    [Theory]
+    [InlineData("ToolOverrides", "[]")]
+    [InlineData("ToolOverrides", "\"\"")]
+    [InlineData("McpServerDefaults", "[]")]
+    [InlineData("McpServerDefaults", "\"\"")]
+    public async Task ReturnsPass_WhenApprovalPolicyMapIsEmptyArrayOrString(string map, string value)
+    {
+        var result = await RunSchemaCheck($$"""
+            { "configVersion": 1, "Tools": { "AudienceProfiles": { "Team": { "ApprovalPolicy": { "{{map}}": {{value}} } } } } }
+            """);
+
+        Assert.Equal(DoctorSeverity.Pass, result.Severity);
+    }
+
+    [Fact]
+    public void IntegerApprovalModes_AreFixedAgainstTheEmbeddedSchema()
+    {
+        // The fix maps an integer to the enum entry at that index, so Auto, Approval and Deny must
+        // stay first in the approval mode enums, in the order of ToolApprovalMode.
+        var schemaText = EmbeddedSchemaLoader.LoadConfigSchema(EmbeddedSchemaLoader.CurrentSchemaVersion)!;
+        var schema = global::Json.Schema.JsonSchema.FromText(schemaText);
+        var schemaJson = JsonNode.Parse(schemaText)!.AsObject();
+        var config = JsonNode.Parse("""
+            { "configVersion": 1, "Tools": { "AudienceProfiles": { "Team": { "ApprovalPolicy": {
+              "DefaultMode": 1,
+              "ToolOverrides": { "a": 0, "b": 1, "c": 2, "d": 3, "e": -1 },
+              "McpServerDefaults": { "s": 2 } } } } } }
+            """)!.AsObject();
+
+        Assert.Equal(["Auto", "Approval", "Deny"], Enum.GetNames<ToolApprovalMode>());
+        Assert.True(SchemaFixResolver.TryApplySchemaFixes(schema, schemaJson, config, out _));
+
+        var policy = config["Tools"]!["AudienceProfiles"]!["Team"]!["ApprovalPolicy"]!;
+        Assert.Equal("Approval", policy["DefaultMode"]!.GetValue<string>());
+        Assert.Equal("Auto", policy["ToolOverrides"]!["a"]!.GetValue<string>());
+        Assert.Equal("Approval", policy["ToolOverrides"]!["b"]!.GetValue<string>());
+        Assert.Equal("Deny", policy["ToolOverrides"]!["c"]!.GetValue<string>());
+        Assert.Equal(3, policy["ToolOverrides"]!["d"]!.GetValue<int>());
+        Assert.Equal(-1, policy["ToolOverrides"]!["e"]!.GetValue<int>());
+        Assert.Equal("Deny", policy["McpServerDefaults"]!["s"]!.GetValue<string>());
+
+        // Without the two values that the fix leaves alone, the fixed config is valid.
+        policy["ToolOverrides"]!.AsObject().Remove("d");
+        policy["ToolOverrides"]!.AsObject().Remove("e");
+        Assert.True(schema.Evaluate(config).IsValid);
+    }
+
+    [Fact]
+    public async Task ValidListsAreNotReportedAsErrors_WhenAnotherFieldIsInvalid()
+    {
+        // The list schemas use anyOf. A valid array must not leave a failed branch in the report,
+        // or the real errors fall out of the first five lines and the lists look wrong.
+        var result = await RunSchemaCheck("""
+            {
+              "configVersion": 1,
+              "Slack": { "Enabled": "yes" },
+              "Tools": {
+                "WebFetch": { "HttpAllowList": ["localhost"] },
+                "AudienceProfiles": {
+                  "GlobalReadRoots": ["{skills_dir}"],
+                  "Team": {
+                    "AllowedTools": ["file_read"],
+                    "AllowedMcpServers": ["notion"],
+                    "ReadFiles": { "Roots": ["/srv/a"] },
+                    "WriteFiles": { "Roots": ["/srv/a"] },
+                    "AttachFiles": { "Roots": ["/srv/a"] },
+                    "ChannelAttachments": { "AllowedCategories": ["Image"] },
+                    "ApprovalPolicy": { "ToolOverrides": { "shell_execute": "Sometimes" } }
+                  }
+                }
+              }
+            }
+            """);
+
+        Assert.Equal(DoctorSeverity.Error, result.Severity);
+        Assert.Contains("/Slack/Enabled", result.Message, StringComparison.Ordinal);
+        Assert.Contains("/ToolOverrides/shell_execute", result.Message, StringComparison.Ordinal);
+        foreach (var list in new[] { "HttpAllowList", "GlobalReadRoots", "AllowedTools", "AllowedMcpServers", "Roots", "AllowedCategories" })
+            Assert.DoesNotContain(list, result.Message, StringComparison.Ordinal);
+    }
+
+    private async Task<DoctorCheckResult> RunSchemaCheck(string json)
+    {
+        var paths = new NetclawPaths(CreateTempBasePath());
+        paths.EnsureDirectoriesExist();
+        await File.WriteAllTextAsync(paths.NetclawConfigPath, json, TestContext.Current.CancellationToken);
+        return await new ConfigSchemaDoctorCheck(paths).RunAsync(TestContext.Current.CancellationToken);
+    }
+
+    [Fact]
+    public async Task ReturnsError_WhenToolOverridesHasUnknownMode()
+    {
+        var paths = new NetclawPaths(CreateTempBasePath());
+        paths.EnsureDirectoriesExist();
+
+        await File.WriteAllTextAsync(paths.NetclawConfigPath,
+            """
+            { "configVersion": 1, "Tools": { "AudienceProfiles": { "Team": { "ApprovalPolicy": { "ToolOverrides": { "shell_execute": "Sometimes" } } } } } }
+            """, TestContext.Current.CancellationToken);
+
+        var result = await new ConfigSchemaDoctorCheck(paths).RunAsync(TestContext.Current.CancellationToken);
+
+        Assert.Equal(DoctorSeverity.Error, result.Severity);
     }
 
     private string CreateTempBasePath()

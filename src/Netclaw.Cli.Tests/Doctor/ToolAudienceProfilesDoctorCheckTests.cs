@@ -978,6 +978,7 @@ public sealed class ToolAudienceProfilesDoctorCheckTests : IDisposable
     [InlineData("null")]
     [InlineData("{}")]
     [InlineData("[]")]
+    [InlineData("\"\"")]
     public async Task OverrideKeyWithNoValue_IsReportedAsIgnored(string value)
     {
         WriteConfig(
@@ -993,6 +994,25 @@ public sealed class ToolAudienceProfilesDoctorCheckTests : IDisposable
         Assert.Equal(DoctorSeverity.Warning, result.Severity);
         Assert.Contains("Tools.AudienceProfiles.Team.ApprovalPolicy.ToolOverrides key 'file_write' has no value and was ignored.", result.Message);
         Assert.DoesNotContain("':'", result.Message);
+    }
+
+    [Theory]
+    [InlineData("null")]
+    [InlineData("{}")]
+    public async Task NullOrEmptyObjectGrantList_IsReportedAsEmptyList(string value)
+    {
+        WriteConfig(
+            $$"""
+            {
+              "configVersion": 1,
+              "Tools": { "AudienceProfiles": { "Team": { "AllowedTools": {{value}} } } }
+            }
+            """);
+
+        var result = await new ToolAudienceProfilesDoctorCheck(_paths).RunAsync(TestContext.Current.CancellationToken);
+
+        Assert.Equal(DoctorSeverity.Warning, result.Severity);
+        Assert.Contains("Tools.AudienceProfiles.Team.AllowedTools is null or an empty object", result.Message);
     }
 
     [Fact]
