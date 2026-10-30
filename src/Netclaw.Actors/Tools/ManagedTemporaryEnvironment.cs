@@ -146,12 +146,46 @@ internal static class ManagedTemporaryEnvironment
         // The base first, then the key folder below it.
         foreach (var folder in new[] { privateBase.Value, location.StorageRoot.Value })
         {
-            Directory.CreateDirectory(folder, PrivateFolderMode);
-            if (CheckFolder(folder, inspector) is { } refusal)
+            if (CreateAndCheckFolder(folder, inspector) is { } refusal)
                 return refusal;
         }
 
         return null;
+    }
+
+    [System.Runtime.Versioning.UnsupportedOSPlatform("windows")]
+    private static string? CreateAndCheckFolder(string folder, IManagedTemporaryFolderInspector inspector)
+    {
+        Directory.CreateDirectory(folder, PrivateFolderMode);
+        return CheckFolder(folder, inspector);
+    }
+
+    /// <summary>
+    /// Runs the shell launch's checks on the per-user base alone (created with mode 0700, then not a
+    /// link, owned by the daemon user, no group or other bit). The daemon calls it at startup.
+    /// </summary>
+    /// <returns><c>null</c> when the shell launch would accept the base; otherwise its reason.</returns>
+    internal static ManagedTemporaryBaseRefusal? CheckBase(ManagedTemporaryBase privateBase)
+    {
+        if (OperatingSystem.IsWindows())
+            return null;
+
+        try
+        {
+            return CreateAndCheckFolder(privateBase.Value, HostManagedTemporaryFolderInspector.Instance) is { } refusal
+                ? new ManagedTemporaryBaseRefusal(refusal, CouldNotUseFilesystem: false)
+                : null;
+        }
+        catch (Exception ex) when (ex is ArgumentException
+                                   or IOException
+                                   or NotSupportedException
+                                   or UnauthorizedAccessException
+                                   or System.Security.SecurityException)
+        {
+            return new ManagedTemporaryBaseRefusal(
+                $"Error preparing managed temporary directory: {ex.Message}",
+                CouldNotUseFilesystem: true);
+        }
     }
 
     // Each check reads the folder without following a link: not a link, owned by the daemon user,
@@ -175,6 +209,12 @@ internal static class ManagedTemporaryEnvironment
         return null; // the folder passed every check
     }
 }
+
+/// <summary>Why <see cref="ManagedTemporaryEnvironment.CheckBase"/> refused the base.</summary>
+/// <param name="Reason">The refusal text the shell launch would report.</param>
+/// <param name="CouldNotUseFilesystem">True when creating or reaching the folder failed (for example a read-only
+/// filesystem); false when the folder exists but is a link, has another owner, or allows group or other access.</param>
+internal sealed record ManagedTemporaryBaseRefusal(string Reason, bool CouldNotUseFilesystem);
 
 /// <summary>
 /// Reads the facts of one folder without following a link at the final path segment

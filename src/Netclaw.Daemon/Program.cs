@@ -245,7 +245,9 @@ static async Task RunDaemonAsync(
     builder.Services.AddSingleton<SessionIngressGate>();
     // The layout is a required dependency of the resolver. On POSIX it is the short per-user base
     // /tmp/netclaw-<uid> (issue #2554). A host that cannot read its user ID fails at startup.
-    builder.Services.AddSingleton<ManagedTemporaryLayout>(_ => ManagedTemporaryLayout.ForHost());
+    var managedTemporaryLayout = ManagedTemporaryLayout.ForHost();
+    builder.Services.AddSingleton(managedTemporaryLayout);
+
     builder.Services.AddSingleton<ISessionStorageResolver, SqliteSessionStorageResolver>();
     builder.Services.AddSingleton<RestartManifestStore>();
     builder.Services.AddSingleton<RejectedConfigState>();
@@ -262,6 +264,13 @@ static async Task RunDaemonAsync(
     var startupLogger = app.Services
         .GetRequiredService<ILoggerFactory>()
         .CreateLogger("Netclaw.Startup");
+
+    // A read-only root filesystem with no tmpfs on /tmp leaves the daemon healthy while every shell
+    // call fails. Log it once here and report it from the status endpoint, which probes again per
+    // request; readiness stays green so a supervisor does not restart-loop a working daemon.
+    if (ShellTemporaryDirectoryState.Probe(managedTemporaryLayout).Problem is { } shellTemporaryProblem)
+        startupLogger.LogError("{Problem}", shellTemporaryProblem);
+
     startupLogger.LogInformation(
         "Selected native shell {Executable} at {ExecutablePath} with {Grammar} grammar and {Dialect} dialect.",
         shellResolution.Environment.ExecutableName,
