@@ -20,6 +20,7 @@ $PowerShellExecutable = if ($PSVersionTable.PSEdition -eq "Desktop") {
 
 $RepoRoot = (Resolve-Path (Join-Path (Join-Path $PSScriptRoot "..") "..")).Path
 $InstallPs1 = Join-Path (Join-Path $RepoRoot "scripts") "install.ps1"
+$UninstallPs1 = Join-Path (Join-Path $RepoRoot "scripts") "uninstall.ps1"
 $Version = "0.0.0"            # stable -> manifest.latest
 $BetaVersion = "0.0.1-beta1"  # prerelease -> manifest.latestPrerelease
 $Rid = "win-x64"
@@ -477,6 +478,227 @@ try {
     }
     $relExpected = Join-Path (Join-Path (Join-Path $relCwd "rel\nc") "config") "netclaw.json"
     if (Test-Path $relExpected) { Pass "home: relative NETCLAW_HOME resolves against the working directory" } else { Fail "home: relative NETCLAW_HOME (expected $relExpected)" }
+
+    # ── 10. Uninstall round-trip and PATH preservation ───────────────────────
+    # The highest-value Windows test: install with a real User PATH entry,
+    # uninstall, and assert the registry value is restored byte-for-byte with
+    # its original kind. A test that only checks "the binaries are gone" misses
+    # a corrupted PATH rewrite.
+
+    function Invoke-HomeUninstall([string]$fakeProfile, [AllowNull()][string]$netclawHome, [string]$installDir, [string[]]$uninstallArgs) {
+        New-Item -ItemType Directory -Path $fakeProfile -Force | Out-Null
+        $env:USERPROFILE = $fakeProfile
+        $env:NETCLAW_HOME = $netclawHome
+        try {
+            & $PowerShellExecutable -NoProfile -File $UninstallPs1 -InstallDir $installDir @uninstallArgs 2>&1 | Out-String
+        } finally {
+            $env:USERPROFILE = $RealUserProfile
+            $env:NETCLAW_HOME = $null
+        }
+    }
+
+    # 10a. Round-trip: install with shell integration, uninstall, and compare
+    # the User PATH against its pre-install value.
+    $rtProfile = Join-Path $Work "uninstall-roundtrip-user"
+    $rtInstall = Join-Path $Work "uninstall-roundtrip-bin"
+    New-Item -ItemType Directory -Path (Join-Path $rtProfile ".netclaw") -Force | Out-Null
+
+    # A realistic User PATH with an existing entry and a REG_EXPAND_SZ value.
+    $existingEntry = Join-Path $Work "some-existing-dir"
+    New-Item -ItemType Directory -Path $existingEntry -Force | Out-Null
+    Set-UserPathRegistryState $true "%SystemRoot%;$existingEntry" ([Microsoft.Win32.RegistryValueKind]::ExpandString)
+
+    # Install with shell integration so the installer prepends its entry.
+    $env:USERPROFILE = $rtProfile
+    try {
+        & $PowerShellExecutable -NoProfile -File $InstallPs1 -InstallDir $rtInstall *>&1 | Out-Null
+    } finally {
+        $env:USERPROFILE = $RealUserProfile
+    }
+
+    $installedPath = Get-UserPathRegistryState
+    $installedEntries = @($installedPath.Value -split ';' | Where-Object { $_ })
+    if ($installedEntries[0] -eq $rtInstall `
+        -and $installedEntries -contains "%SystemRoot%" `
+        -and $installedEntries -contains $existingEntry) {
+        Pass "uninstall: install prepended its entry to a REG_EXPAND_SZ User PATH"
+    } else {
+        Fail "uninstall: install did not prepend its entry correctly"
+    }
+
+    # Uninstall with shell integration.
+    Invoke-HomeUninstall $rtProfile $null $rtInstall @() | Out-Null
+    $restoredPath = Get-UserPathRegistryState
+    if ($restoredPath.Value -eq "%SystemRoot%;$existingEntry" `
+        -and $restoredPath.Kind -eq [Microsoft.Win32.RegistryValueKind]::ExpandString) {
+        Pass "uninstall: User PATH restored byte-for-byte with its original kind"
+    } else {
+        Fail "uninstall: User PATH not restored (value='$($restoredPath.Value)' kind=$($restoredPath.Kind))"
+    }
+
+    # 10b. Binaries and the install directory are gone.
+    if (-not (Test-Path -LiteralPath (Join-Path $rtInstall "netclaw.exe")) `
+        -and -not (Test-Path -LiteralPath (Join-Path $rtInstall "netclawd.exe"))) {
+        Pass "uninstall: binaries removed"
+    } else {
+        Fail "uninstall: binaries still present"
+    }
+
+    # 10c. Standard uninstall keeps the data directory.
+    $rtData = Join-Path (Join-Path $rtProfile ".netclaw") "config\netclaw.json"
+    New-Item -ItemType Directory -Path (Split-Path $rtData) -Force | Out-Null
+    Set-Content -Path $rtData -Value '{"configVersion":1}'
+    Invoke-HomeUninstall $rtProfile $null $rtInstall @() | Out-Null
+    if (Test-Path $rtData) {
+        Pass "uninstall: standard uninstall keeps the data directory"
+    } else {
+        Fail "uninstall: standard uninstall deleted the data directory"
+    }
+
+    # 10d. -Purge removes it.
+    Invoke-HomeUninstall $rtProfile $null $rtInstall @("-Purge", "-Yes") | Out-Null
+    if (-not (Test-Path -LiteralPath (Join-Path $rtProfile ".netclaw"))) {
+        Pass "uninstall: -Purge removes the data directory"
+    } else {
+        Fail "uninstall: -Purge left the data directory"
+    }
+
+    # 10e. Idempotency: a second uninstall exits 0.
+    $secondOut = Invoke-HomeUninstall $rtProfile $null $rtInstall @()
+    if ($LASTEXITCODE -eq 0) {
+        Pass "uninstall: second uninstall exits 0"
+    } else {
+        Fail "uninstall: second uninstall exited $LASTEXITCODE"
+    }
+
+    # 10f. -DryRun changes nothing.
+    $dryProfile = Join-Path $Work "uninstall-dry-user"
+    $dryInstall = Join-Path $Work "uninstall-dry-bin"
+    New-Item -ItemType Directory -Path (Join-Path $dryProfile ".netclaw") -Force | Out-Null
+    Set-UserPathRegistryState $true "%SystemRoot%;$existingEntry" ([Microsoft.Win32.RegistryValueKind]::ExpandString)
+    $env:USERPROFILE = $dryProfile
+    try {
+        & $PowerShellExecutable -NoProfile -File $InstallPs1 -InstallDir $dryInstall *>&1 | Out-Null
+    } finally {
+        $env:USERPROFILE = $RealUserProfile
+    }
+    $dryBefore = Get-UserPathRegistryState
+    $dryBinariesBefore = @(Get-ChildItem -LiteralPath $dryInstall -Force -ErrorAction SilentlyContinue | Sort-Object Name | ForEach-Object { $_.Name })
+    Invoke-HomeUninstall $dryProfile $null $dryInstall @("-DryRun") | Out-Null
+    $dryAfter = Get-UserPathRegistryState
+    $dryBinariesAfter = @(Get-ChildItem -LiteralPath $dryInstall -Force -ErrorAction SilentlyContinue | Sort-Object Name | ForEach-Object { $_.Name })
+    if ($dryBefore.Value -eq $dryAfter.Value `
+        -and $dryBefore.Kind -eq $dryAfter.Kind `
+        -and ($dryBinariesBefore -join ',') -eq ($dryBinariesAfter -join ',')) {
+        Pass "uninstall: -DryRun changes nothing"
+    } else {
+        Fail "uninstall: -DryRun changed the tree or PATH"
+    }
+
+    # 10g. -Purge without -Yes and no interactive host refuses and preserves data.
+    $refProfile = Join-Path $Work "uninstall-refuse-user"
+    $refInstall = Join-Path $Work "uninstall-refuse-bin"
+    New-Item -ItemType Directory -Path (Join-Path $refProfile ".netclaw") -Force | Out-Null
+    $refData = Join-Path (Join-Path $refProfile ".netclaw") "config\netclaw.json"
+    New-Item -ItemType Directory -Path (Split-Path $refData) -Force | Out-Null
+    Set-Content -Path $refData -Value '{"configVersion":1}'
+    # A non-interactive child: stdin is redirected, so the script must refuse
+    # rather than prompt.
+    $refExit = 0
+    $env:USERPROFILE = $refProfile
+    try {
+        $refOut = & $PowerShellExecutable -NoProfile -File $UninstallPs1 -InstallDir $refInstall -Purge 2>&1 | Out-String
+        if ($LASTEXITCODE -ne 0) { $refExit = $LASTEXITCODE }
+    } finally {
+        $env:USERPROFILE = $RealUserProfile
+    }
+    if ($refExit -eq 3) {
+        Pass "uninstall: -Purge without -Yes exits 3 in a non-interactive session"
+    } else {
+        Fail "uninstall: -Purge without -Yes exited $refExit (expected 3)"
+    }
+    if (Test-Path $refData) {
+        Pass "uninstall: refused purge preserved the data directory"
+    } else {
+        Fail "uninstall: refused purge deleted the data directory"
+    }
+
+    # 10h. -SkipShell leaves the User PATH untouched.
+    $skipProfile = Join-Path $Work "uninstall-skip-user"
+    $skipInstall = Join-Path $Work "uninstall-skip-bin"
+    New-Item -ItemType Directory -Path (Join-Path $skipProfile ".netclaw") -Force | Out-Null
+    Set-UserPathRegistryState $true "%SystemRoot%;$existingEntry" ([Microsoft.Win32.RegistryValueKind]::ExpandString)
+    $env:USERPROFILE = $skipProfile
+    try {
+        & $PowerShellExecutable -NoProfile -File $InstallPs1 -InstallDir $skipInstall *>&1 | Out-Null
+    } finally {
+        $env:USERPROFILE = $RealUserProfile
+    }
+    $skipBefore = Get-UserPathRegistryState
+    Invoke-HomeUninstall $skipProfile $null $skipInstall @("-SkipShell") | Out-Null
+    $skipAfter = Get-UserPathRegistryState
+    if ($skipBefore.Value -eq $skipAfter.Value `
+        -and $skipBefore.Kind -eq $skipAfter.Kind) {
+        Pass "uninstall: -SkipShell leaves the User PATH untouched"
+    } else {
+        Fail "uninstall: -SkipShell modified the User PATH"
+    }
+
+    # 10i. A %VAR% entry that resolves to the install dir is removed.
+    $varProfile = Join-Path $Work "uninstall-var-user"
+    $varInstall = Join-Path $Work "uninstall-var-bin"
+    New-Item -ItemType Directory -Path (Join-Path $varProfile ".netclaw") -Force | Out-Null
+    $env:NETCLAW_SMOKE_INSTALL_DIR = $varInstall
+    Set-UserPathRegistryState $true "%NETCLAW_SMOKE_INSTALL_DIR%;$existingEntry" ([Microsoft.Win32.RegistryValueKind]::ExpandString)
+    Invoke-HomeUninstall $varProfile $null $varInstall @() | Out-Null
+    $varAfter = Get-UserPathRegistryState
+    if ($varAfter.Value -eq $existingEntry `
+        -and $varAfter.Kind -eq [Microsoft.Win32.RegistryValueKind]::ExpandString) {
+        Pass "uninstall: %VAR% entry resolving to the install dir is removed"
+    } else {
+        Fail "uninstall: %VAR% entry was not removed (value='$($varAfter.Value)')"
+    }
+
+    # 10j. A sibling directory with a prefix name is not removed.
+    $prefixProfile = Join-Path $Work "uninstall-prefix-user"
+    $prefixInstall = Join-Path $Work "uninstall-prefix-bin"
+    New-Item -ItemType Directory -Path (Join-Path $prefixProfile ".netclaw") -Force | Out-Null
+    $prefixSibling = "$prefixInstall-extra"
+    Set-UserPathRegistryState $true "$prefixSibling;$prefixInstall" ([Microsoft.Win32.RegistryValueKind]::String)
+    Invoke-HomeUninstall $prefixProfile $null $prefixInstall @() | Out-Null
+    $prefixAfter = Get-UserPathRegistryState
+    if ($prefixAfter.Value -eq $prefixSibling `
+        -and $prefixAfter.Kind -eq [Microsoft.Win32.RegistryValueKind]::String) {
+        Pass "uninstall: sibling prefix directory is preserved"
+    } else {
+        Fail "uninstall: sibling prefix directory was damaged (value='$($prefixAfter.Value)')"
+    }
+
+    # 10k. An empty -InstallDir that is not a Netclaw install is not deleted.
+    # -InstallDir accepts any path, so "the directory is empty" is not proof
+    # that we emptied it.
+    $emptyProfile = Join-Path $Work "uninstall-empty-user"
+    $emptyInstall = Join-Path $Work "uninstall-empty-not-netclaw"
+    New-Item -ItemType Directory -Path $emptyProfile, $emptyInstall -Force | Out-Null
+    Invoke-HomeUninstall $emptyProfile $null $emptyInstall @() | Out-Null
+    if (Test-Path -LiteralPath $emptyInstall) {
+        Pass "uninstall: an already-empty install directory is not deleted"
+    } else {
+        Fail "uninstall: an already-empty install directory was deleted"
+    }
+
+    # 10l. The same guard holds when -InstallDir is the profile directory.
+    $selfProfile = Join-Path $Work "uninstall-self-user"
+    New-Item -ItemType Directory -Path $selfProfile -Force | Out-Null
+    Invoke-HomeUninstall $selfProfile $null $selfProfile @() | Out-Null
+    if (Test-Path -LiteralPath $selfProfile) {
+        Pass "uninstall: -InstallDir pointing at the profile is not deleted"
+    } else {
+        Fail "uninstall: -InstallDir pointing at the profile was deleted"
+    }
+
+    # Restore the User PATH to its original state for the finally block.
+    Set-UserPathRegistryState $OriginalUserPath.Exists $OriginalUserPath.Value $OriginalUserPath.Kind
 }
 finally {
     if ($ServerProc -and -not $ServerProc.HasExited) { $ServerProc.Kill() }
