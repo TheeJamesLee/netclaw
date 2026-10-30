@@ -39,4 +39,22 @@ internal static class DaemonCommandDispatch
     public static bool ShouldShowDevicesHelp(string[] args)
         => CliArgsParser.IsHelpToken(args.Length > 2 ? args[2] : "list")
            || CliArgsParser.HasTrailingHelpToken(args, startIndex: 3, includeBareHelp: false);
+
+    /// <summary>
+    /// The one line <c>daemon status</c> prints when the process runs but the local config
+    /// gives no address to probe. Status deliberately skips the probe then, so it does not
+    /// reach whatever daemon holds the default port. <paramref name="reason"/> names the
+    /// failing file when one can be found; a bad NETCLAW_* setting has no file to name.
+    /// </summary>
+    public static string FormatAddressUnknown(DaemonStatus status, string? reason = null, string? fix = null)
+    {
+        var who = status.Pid is { } pid
+            ? $" (PID {pid}{(status.Uptime is { } uptime ? $", uptime {uptime}" : "")})"
+            : "";
+        var cause = string.IsNullOrEmpty(reason)
+            ? "The local configuration (netclaw.json, secrets.json or NETCLAW_* settings) is unreadable or invalid. Repair it and retry."
+            : $"{reason} {fix}".TrimEnd();
+        return $"Daemon process is running{who}, but its address cannot be determined, so readiness was not checked. {cause}"
+               + (status.Pid is null ? " The PID file is missing; the daemon will self-terminate shortly." : "");
+    }
 }

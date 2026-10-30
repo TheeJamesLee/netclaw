@@ -678,6 +678,14 @@ Leaks today:
 | Data | Call-local. Git repository facts are read from disk at each check. The protected path sets are process-local. |
 | Rules | [TA-6](../../openspec/specs/tool-authorization/spec.md#requirement-ta-6-path-access-decisions-own-file-tool-authority) |
 
+The operator command `netclaw skill remove` also uses the shared filesystem authority.
+`SkillCommand.RunRemoveAsync` checks the local daemon endpoint and requires the exact `native` source label.
+`PathUtility.IsWithinRootWithoutLinks` delegates containment and link checks to `FileSystemAuthority` with `LinkRule.BelowRoot`.
+
+The command checks both the file and directory before deletion. Its data is call-local.
+The trusted skills root and its ancestors may contain links. Links below that root cause refusal.
+This operator path adds no session grant or tool consent. See [the CLI contract](../spec/SPEC-004-cli-contract.md#7-external-skill-sync).
+
 The session accepts a project-directory change through
 [`WorkingContextUpdater.AcceptToolResult`](../../src/Netclaw.Actors/Sessions/WorkingContextUpdater.cs).
 This rule requires a successful `set_working_directory` receipt with a declared project directory.
@@ -880,7 +888,7 @@ Leaks today:
 | Classes | [`ApprovalPatternMatching`](../../src/Netclaw.Security/ApprovalPatternMatching.cs), [`ToolApprovalActor`](../../src/Netclaw.Actors/Tools/ToolApprovalActor.cs), [`ToolApprovalStore`](../../src/Netclaw.Configuration/ToolApprovalStore.cs), [`ApprovalEntry`](../../src/Netclaw.Configuration/ApprovalEntry.cs), [`ApprovalBucketBuilder`](../../src/Netclaw.Actors/Sessions/ApprovalBucketBuilder.cs), [`ShellApprovalEvidence`](../../src/Netclaw.Actors/Tools/ShellApprovalEvidence.cs), [`OneTimeApprovalKeys`](../../src/Netclaw.Actors/Tools/OneTimeApprovalKeys.cs), [`ReviewedSafeShellPolicy`](../../src/Netclaw.Actors/Tools/ReviewedSafeShellPolicy.cs), [`ShellPolicyEvaluation`](../../src/Netclaw.Actors/Tools/ShellPolicyEvaluation.cs), [`ShellPolicyProjection`](../../src/Netclaw.Actors/Tools/ShellPolicyProjection.cs) |
 | Published contract | `IShellApprovalMatchService.MatchShellCandidatesAsync(...)` (shell, one batched lookup), `IToolApprovalService.CheckApprovalAsync(...)` (other tools), `IStructuredToolApprovalService.RecordApprovalCandidatesAsync(...)` (store an answer). [`AkkaToolApprovalService`](../../src/Netclaw.Actors/Tools/AkkaToolApprovalService.cs) implements all three over `ToolApprovalActor`. |
 | Must not know | Shell syntax (it receives candidates), channels. |
-| Data | Persistent grants: `~/.netclaw/config/tool-approvals.json`, version 3, durable. Chat grants: actor-local in `ToolApprovalActor`. One-time consent: call-local keys in `ToolApprovalAttempt`. Coverage: call-local. A child consent request lives in the run record: the `Parked` record holds the park and its requests, and each answer goes into the park. The session snapshot holds the run record, so a parked prompt survives a restart, a compaction snapshot, and passivation. A restart withdraws only the child requests of runs that did not park. |
+| Data | Persistent grants: `~/.netclaw/config/tool-approvals.json`, version 3, durable. Chat grants: actor-local in `ToolApprovalActor`. One-time consent: call-local keys in `ToolApprovalAttempt`. Coverage: call-local. A child consent request lives in the run record: the `Parked` record holds the park and its requests, and each answer goes into the park. The session snapshot holds the run record, so a parked prompt survives a restart, a compaction snapshot, and passivation. A child prompt shows only after the park is in the run record, so a restart does not withdraw it. A prompt that an earlier version left open is withdrawn at the upgrade restart. |
 | Rules | [TA-8](../../openspec/specs/tool-authorization/spec.md#requirement-ta-8-every-candidate-needs-coverage), [TA-13](../../openspec/specs/tool-authorization/spec.md#requirement-ta-13-the-persistent-grant-store-fails-closed) |
 
 Leaks today:
@@ -2018,7 +2026,7 @@ change is small.
 | Close the `skill_manage` parent-directory check-to-use window | Not supported today | The temp file uses create-new semantics, so a link at the temp name fails. A same-user process that can already write where the daemon writes can still swap a parent directory. That gives no new authority today. With a sandboxed executor, fix it in Filesystem authority with directory-handle operations. |
 | A missing or unreadable audience becomes an error (owner decision, September 29) | Planned | Today some components fall back to `Public` (TA-1). A follow-up code PR makes each such fallback fail loudly. Until that PR merges, the fallback stays as TA-1 describes it. |
 | A consent for repository A that covers repository B | Not supported, by design | This is an invariant. A repository grant covers only registered worktrees of one Git common directory (TA-8). |
-| A running child survives a restart (#2655) | Planned | At a graceful drain, a running child stops at its next batch boundary and sends a park with no request. Recovery already resumes such a park (`ChildParkRules.RecoveryAction`). Today recovery records a running child as lost. |
+| A running child survives a graceful restart (#2655) | Supported | At a graceful drain, a running child stops at its next batch boundary and sends a park with no request. A child that waits on a model reply cancels that call and parks at once. Recovery resumes such a park (`ChildParkRules.RecoveryAction`). A child that does not park in time ends as `owner_restarted`, and a crash still records the run as lost. |
 | Messages between agents (`notify_parent`, `message_child`, sibling messages) | Needs a contract | One `AgentEvent` subtype, one renderer case, and one tool each. A message body is agent text, so it goes to a run file, and the event carries the path. The envelope gets event, correlation, and causation IDs. |
 | One answer for many child prompts ("approve for all") | Not supported, by design | Each prompt binds one-time consent to one exact call (owner decision Q2). |
 

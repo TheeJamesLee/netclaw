@@ -569,9 +569,9 @@ static async Task RunAsync(string[] args)
             case "status":
             {
                 var status = manager.GetStatus();
-                Console.WriteLine(status.Message);
                 if (!status.IsRunning || !status.ServesThisHome)
                 {
+                    Console.WriteLine(status.Message);
                     Environment.ExitCode = 1;
                     return;
                 }
@@ -581,11 +581,19 @@ static async Task RunAsync(string[] args)
                 // port baked into the image.
                 var (ready, readyEndpoint) = await DaemonApi.ProbeLocalReadinessAsync(paths);
 
+                if (readyEndpoint is null)
+                {
+                    // One message: "Daemon running" followed by "address unknown" read as a contradiction.
+                    CliConfigPreflight.TryDescribeUnreadableConfig(paths, out var unreadable, out var unreadableFix);
+                    Console.WriteLine(DaemonCommandDispatch.FormatAddressUnknown(status, unreadable, unreadableFix));
+                    Environment.ExitCode = 1;
+                    return;
+                }
+
+                Console.WriteLine(status.Message);
                 if (!ready)
                 {
-                    Console.WriteLine(readyEndpoint is null
-                        ? "The local daemon address is unknown. No readiness probe was sent. Repair the local configuration and retry."
-                        : $"Daemon process is running but {readyEndpoint}/api/health/ready did not answer.");
+                    Console.WriteLine($"Daemon process is running but {readyEndpoint}/api/health/ready did not answer.");
                     Environment.ExitCode = 1;
                     return;
                 }
@@ -907,15 +915,11 @@ static async Task RunAsync(string[] args)
     if (mode is "skill")
     {
         var skillSubcommand = args.Length > 1 ? args[1] : "list";
-        if (skillSubcommand is "list" or "sync")
+        if (skillSubcommand is "list" or "sync" or "show" or "remove")
         {
-            // `skill list` is served by the daemon's live registry — the only view
-            // that includes dynamic MCP prompt skills. It requires the daemon; when
-            // the daemon is unavailable, SkillCommand reports that and exits non-zero
-            // (no disk fallback). Building the DI host parses local config
-            // (netclaw.json, secrets.json); a corrupt file must produce a readable
-            // error, not a stack trace — the old disk-scan list never read those
-            // files, so this path must not make them a new way to crash.
+            // These commands need the complete daemon registry.
+            // The host reads local configuration before it creates DaemonApi.
+            // Report malformed configuration without a stack trace.
             try
             {
                 var builder = CreateQuietHostBuilder(args);

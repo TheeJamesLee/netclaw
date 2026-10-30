@@ -186,7 +186,7 @@ static async Task RunDaemonAsync(
     builder.WebHost.UseUrls($"http://{daemonConfig.Host}:{daemonConfig.Port}");
     var daemonLogLevel = builder.ConfigureNetclawLogging(paths);
     builder.AddNetclawTelemetry();
-    var (configurationWarnings, configurationNotices) = ConfigureDaemonServices(
+    var (configurationWarnings, configurationNotices, initialSkillScan) = ConfigureDaemonServices(
         builder.Services,
         builder.Configuration,
         paths,
@@ -245,7 +245,9 @@ static async Task RunDaemonAsync(
     builder.Services.AddSingleton<SessionIngressGate>();
     // The layout is a required dependency of the resolver. On POSIX it is the short per-user base
     // /tmp/netclaw-<uid> (issue #2554). A host that cannot read its user ID fails at startup.
-    builder.Services.AddSingleton<ManagedTemporaryLayout>(_ => ManagedTemporaryLayout.ForHost());
+    var managedTemporaryLayout = ManagedTemporaryLayout.ForHost();
+    builder.Services.AddSingleton(managedTemporaryLayout);
+
     builder.Services.AddSingleton<ISessionStorageResolver, SqliteSessionStorageResolver>();
     builder.Services.AddSingleton<RestartManifestStore>();
     builder.Services.AddSingleton<RejectedConfigState>();
@@ -262,6 +264,13 @@ static async Task RunDaemonAsync(
     var startupLogger = app.Services
         .GetRequiredService<ILoggerFactory>()
         .CreateLogger("Netclaw.Startup");
+
+    // A read-only root filesystem with no tmpfs on /tmp leaves the daemon healthy while every shell
+    // call fails. Log it once here and report it from the status endpoint, which probes again per
+    // request; readiness stays green so a supervisor does not restart-loop a working daemon.
+    if (ShellTemporaryDirectoryState.Probe(managedTemporaryLayout).Problem is { } shellTemporaryProblem)
+        startupLogger.LogError("{Problem}", shellTemporaryProblem);
+
     startupLogger.LogInformation(
         "Selected native shell {Executable} at {ExecutablePath} with {Grammar} grammar and {Dialect} dialect.",
         shellResolution.Environment.ExecutableName,
@@ -272,6 +281,7 @@ static async Task RunDaemonAsync(
         startupLogger.LogWarning("Configuration warning: {ConfigurationWarning}", warning);
     foreach (var notice in configurationNotices)
         startupLogger.LogInformation("Configuration notice: {ConfigurationNotice}", notice);
+    SkillScanStartupLogging.Log(startupLogger, initialSkillScan);
 
     if (shellResolution.FallbackReason is { } fallbackReason)
     {
@@ -430,7 +440,8 @@ static (NetclawPaths Paths, ModelSelection Models) ConfigureConfigServices(
     // 1. netclaw.json (base config, optional)
     // 2. secrets.json (credentials overlay, optional)
     // 3. NETCLAW_* environment variables (highest priority)
-    configuration.AddNetclawDaemonSources(bootstrapPaths);
+    var netclawJson = ConfigReloadBaseline.ReadNetclawJson(bootstrapPaths);
+    services.AddSingleton(ConfigReloadBaseline.Load(configuration, bootstrapPaths, netclawJson));
 
     // Re-create paths with config-driven overrides (e.g. custom workspaces directory).
     var workspacesDir = configuration.GetValue<string>("Workspaces:Directory");
@@ -465,7 +476,7 @@ static (NetclawPaths Paths, ModelSelection Models) ConfigureConfigServices(
 // ═══════════════════════════════════════════════════════════════════════
 
 // Returns configuration warnings. The caller logs them after the host builds its loggers.
-static (IReadOnlyList<string> Warnings, IReadOnlyList<string> Notices) ConfigureDaemonServices(
+static (IReadOnlyList<string> Warnings, IReadOnlyList<string> Notices, MergedSkillScanResult InitialSkillScan) ConfigureDaemonServices(
     IServiceCollection services,
     IConfigurationManager configuration,
     NetclawPaths paths,
@@ -866,27 +877,6 @@ static (IReadOnlyList<string> Warnings, IReadOnlyList<string> Notices) Configure
 
     // Skill tools are registered post-build so ISkillContentScanner resolves from DI.
     // See SkillToolRegistration call after app.Build().
-    if (initialSkillScan.Issues.Count > 0)
-    {
-        using var loggerFactory = LoggerFactory.Create(b => b.SetMinimumLevel(daemonLogLevel));
-        var startupLogger = loggerFactory.CreateLogger("Netclaw.Startup");
-        startupLogger.LogWarning(
-            "Skill inventory is degraded at startup: accepted={AcceptedSkillCount} rejected={RejectedIssueCount}",
-            initialSkillScan.AcceptedSkills.Count,
-            initialSkillScan.Issues.Count);
-
-        foreach (var issue in initialSkillScan.Issues)
-        {
-            startupLogger.LogWarning(
-                "Rejected skill item during startup scan: kind={IssueKind} path={Path} message={Message}",
-                issue.Kind,
-                issue.Path,
-                issue.Message);
-        }
-    }
-
-    // Skill tools are registered post-build so ISkillContentScanner resolves from DI.
-    // See SkillToolRegistration call after app.Build().
 
     // Memory context layer — status is updated by ToolIndexUpdater after MCP discovery
     var memoryIndexLayer = new MemoryIndexContextLayer(memoryConfig);
@@ -1053,6 +1043,7 @@ static (IReadOnlyList<string> Warnings, IReadOnlyList<string> Notices) Configure
         akkaBuilder.WithDailyStatsActor();
         akkaBuilder.WithServerFeedSkillSyncActor();
         akkaBuilder.WithDataRetentionActor();
+        akkaBuilder.WithConfigWatcherActor();
 
         // Register reminder tools after actors start (needs ReminderManagerActor ref)
         akkaBuilder.StartActors((system, registry, _) =>
@@ -1147,10 +1138,6 @@ static (IReadOnlyList<string> Warnings, IReadOnlyList<string> Notices) Configure
     // lookups) whenever at least one remote chat channel is enabled.
     services.AddChannelIntegrations(configuration);
 
-    // Config hot-reload watcher
-    services.AddSingleton<ConfigWatcherService>();
-    services.AddSingleton<IHostedService>(sp => sp.GetRequiredService<ConfigWatcherService>());
-
     // Warm previously active sessions after a coordinated restart.
     services.AddSingleton<RestartRecoveryService>();
     services.AddSingleton<IHostedService>(sp => sp.GetRequiredService<RestartRecoveryService>());
@@ -1170,7 +1157,7 @@ static (IReadOnlyList<string> Warnings, IReadOnlyList<string> Notices) Configure
 
     // Expired data is cleared by DataRetentionActor, which runs every RetentionJob registered here.
     var retentionWarnings = services.AddRetentionJobs(configuration, paths);
-    return ([.. toolConfigWarnings, .. retentionWarnings, .. OAuthTokenExpiryStorage.RetiredKeyWarnings(paths)], toolConfigNotices);
+    return ([.. toolConfigWarnings, .. retentionWarnings, .. OAuthTokenExpiryStorage.RetiredKeyWarnings(paths)], toolConfigNotices, initialSkillScan);
 }
 
 static ISearchBackend? CreateSearchBackend(SearchConfig config)

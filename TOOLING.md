@@ -66,7 +66,7 @@ The table retains earlier group measurements. Gate notes below describe later ad
 | `verb-chain` | `exact-verb-chain` (seven invocations, 53 mutants, 9 to 17.5) | 9.5 to 18 |
 | `reminder` | `reminder-execution` (4.4), `literal-twin` (2.9), `stream-commit-gate` (2.5), `shutdown-notice-identity` (18 mutants, one invocation, 3.4) | 13.7 (estimate) |
 | `authorization-and-directory` | `tool-authorization` (5.8), `approval-directory` (5.2) | 11.3 |
-| `guard-and-authority` | `skill-manage-guard` (4.6), `no-program` (5.1), `input-one-authority` (3.2) | 13.3 |
+| `guard-and-authority` | `skill-manage-guard` (4.6), `no-program` (5.1), `input-one-authority` (3.2), `skill-remove` (2.0 local; hosted cost pending) | About 15.3 with the local addition |
 | `shell-consent` | `shell-once-identity` (2.3 local), `compound-redirect` (2.2 local), `thinking-settings` (74 mutants, three invocations, 6.8 local) | 11.3 local; hosted time pending |
 | `stop-proof` | `stop-proof` (81 mutants, two invocations, 6.9), `secrets-plaintext-leaf` (8 mutants, one invocation, 2 to 3, estimate) | 10 to 11 (estimate) |
 | `shell-command-analysis-a` | 131 Security mutants and 27 Actors mutants | [11m28s](https://github.com/netclaw-dev/netclaw/actions/runs/40006783408/job/120596616567) |
@@ -149,6 +149,7 @@ coverage. They do not replace positive and negative behavior tests.
 
 | Target | Protected claim | Expected mutants | Command |
 |--------|-----------------|------------------|---------|
+| `SkillCommand.RunRemoveAsync` source, local endpoint, file boundary, and directory boundary | Removal requires a known native source, the local daemon, and two paths within the skills root without links below it. | 5 required | `./scripts/run-skill-remove-mutations.sh` |
 | `ChatClientActor.Start` (`// chat-close-dispatch-expiry:begin` to `end`) | Issue #2642, PRD-004: a held bind reply permits text dispatch at 1.5 seconds after Close, but refuses it at two seconds | 2 killed | `./scripts/run-chat-close-dispatch-expiry-mutations.sh` |
 | `PathAccessPolicy.AddSessionRoots`, `PathAccessPolicy.IsReadableByAudience`, `PathAccessPolicy.GetEffectiveAccess`, `PathAccessPolicy.IsInOtherTemporaryKeyFolder`, and `ManagedTemporaryEnvironment.CheckFolder` | Only a Personal context receives shared session roots; a reviewed phrase uses the read authority of the audience, attended or not (D2), only for a fully qualified host path of the shell's own style that is not protected; issue #2554: a Personal read or attach follows the write profile and no other audience, operation, or write mode does (write `All` gives `All`, write `Roots` adds its roots, write `None` adds nothing, and a read profile of mode `All` stays `All`); the managed temporary key folder is a session root and the shared base is not; a Team or Public root over the base does not reach another key folder; the shell launch is refused when the base or the key folder is missing, a link, owned by another user, or open to a group or others | 30 killed | `./scripts/run-path-access-mutations.sh` |
 | `ToolAccessPolicy.AdmitMcpAudience` | Server and tool audience grants precede approval | 2 killed | `./scripts/run-tool-authorization-mutations.sh` |
@@ -200,7 +201,8 @@ Stryker records unrelated compilation artifacts outside the selected span; the v
 
 The manual `<=` mutation failed the cutoff row before this gate was added.
 The first local Stryker run killed both expected mutants in 161 seconds.
-The `daemon-log-retention` matrix group keeps this cost separate from existing groups.
+The `daemon-log-retention` matrix group also runs the startup hash check.
+The combined group retains the existing time budget.
 The gate does not measure general code coverage or replace the writer and retention tests.
 
 Run the path-access check locally:
@@ -267,6 +269,26 @@ The finalized gate passes locally and in CI.
 CI places this gate in `child-owner-and-report`; its complete hosted job took 8m14s.
 The combined group must stay within 15 minutes on a fast runner.
 The parent must measure the combined group before acceptance and move this gate if the total exceeds that budget.
+
+### Config Startup Reconciliation Gate
+
+Issue #2485 protects the startup hash check after `ConfigWatcherActor` starts its watcher.
+The host hashes the exact `netclaw.json` bytes that its JSON source consumes.
+The [restart contract](docs/spec/SPEC-011-daemon-architecture.md) follows PRD-001 FR-016.
+
+Run `./scripts/run-config-startup-reconciliation-mutations.sh` with a fresh output directory.
+The linked `DaemonConfigurationSourcesTests` table must kill the exact `loadedHash != currentHash` to `loadedHash == currentHash` mutation.
+The gate checks the source, UTF-16 location, Equality mutator, replacement, count, and `Killed` status.
+An ignored, uncovered, timed-out, compile-error, missing, extra, or surviving target fails.
+An active outside mutant also fails. Compiler artifacts outside the span remain in a separate report.
+The ordinary actor tests prove readiness and timer behavior; three process rows prove actual next-host configuration.
+
+CI runs this gate with `daemon-log-retention` in the existing group.
+On a shared host, hold the build lock through the initial build.
+Release it at `Initial test run started`; keep it free during mutation analysis.
+The default output directory is `artifacts/stryker/config-startup-reconciliation`.
+The two local gate commands took 273 seconds in total, including separate initial builds.
+Hosted group cost remains unverified.
 
 ### No Program Gate
 

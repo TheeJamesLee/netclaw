@@ -15,6 +15,7 @@ using Netclaw.Channels.Telemetry;
 using Netclaw.Configuration;
 using Netclaw.Configuration.Secrets;
 using Netclaw.Daemon.Configuration;
+using Netclaw.Daemon.Tests.Configuration;
 using Netclaw.Daemon.Gateway;
 using Netclaw.Daemon.Mcp;
 using Netclaw.Daemon.Tests.Mcp;
@@ -60,7 +61,8 @@ public sealed class DaemonRuntimeStatusServiceTests : IAsyncLifetime
         RejectedConfigState? rejectedConfig = null,
         MemoryEmbedderHolder? memoryEmbedderHolder = null,
         MemoryConfig? memoryConfig = null,
-        ProviderOAuthTokenRefreshService? oauthRefresh = null)
+        ProviderOAuthTokenRefreshService? oauthRefresh = null,
+        ManagedTemporaryLayout? temporaryLayout = null)
     {
         return new DaemonRuntimeStatusService(
             new DaemonStartClock(TimeProvider.System),
@@ -75,6 +77,7 @@ public sealed class DaemonRuntimeStatusServiceTests : IAsyncLifetime
             providerValidation ?? new ProviderRuntimeValidation(ProviderRuntimeStatus.Valid, null, []),
             rejectedConfig ?? new RejectedConfigState(),
             oauthRefresh ?? CreateOAuthRefresh(paths ?? CreatePaths(), _ => throw new InvalidOperationException("no refresh expected")),
+            temporaryLayout ?? ManagedTemporaryLayout.InsideSessionStorage.Instance,
             mcpClientManager,
             sqliteMemoryStore,
             memoryEmbedderHolder,
@@ -150,6 +153,33 @@ public sealed class DaemonRuntimeStatusServiceTests : IAsyncLifetime
             paths,
             new DeviceFlowServiceFactory(new OAuthDeviceFlowService(http), new OpenAiDeviceFlowService(http)),
             NullLogger<ProviderOAuthTokenRefreshService>.Instance);
+    }
+
+    [Fact(SkipType = typeof(TestPlatform), SkipUnless = nameof(TestPlatform.IsPosix),
+        Skip = "The private temporary base exists only on POSIX hosts")]
+    [SlopwatchSuppress("SW001", "The private temporary base exists only on POSIX hosts.")]
+    public async Task ShellTemporaryDirectory_IsDegradedWhileUnwritableAndHealthyOnceFixedWithoutRestart()
+    {
+        // A regular file in the way stops the base from being created, even as root.
+        var blocker = Path.Combine(_tempBase, "blocker");
+        Directory.CreateDirectory(_tempBase);
+        File.WriteAllText(blocker, string.Empty);
+        var baseFolder = Path.Combine(blocker, "netclaw-1000");
+        var service = CreateService(temporaryLayout: new ManagedTemporaryLayout.PrivateBase(new ManagedTemporaryBase(baseFolder)));
+
+        var before = await service.GetStatusAsync(TestContext.Current.CancellationToken);
+
+        Assert.Equal("degraded", before.Overall);
+        var connector = Assert.Single(before.Connectors, c => c.Key == "shell:temp");
+        Assert.Equal("degraded", connector.Status);
+        Assert.Contains(baseFolder, connector.Message);
+
+        File.Delete(blocker);
+
+        var after = await service.GetStatusAsync(TestContext.Current.CancellationToken);
+
+        Assert.Equal("healthy", after.Overall);
+        Assert.DoesNotContain(after.Connectors, c => c.Key == "shell:temp");
     }
 
     [Fact]
